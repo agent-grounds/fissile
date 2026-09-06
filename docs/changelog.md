@@ -40,7 +40,7 @@ and at 0.x semver puts the minor number in charge of it.
   as the issue is opened, and `config.yml` turns blank issues off so no issue
   can arrive without a kind. Every form asks for the fields that make a report
   actionable: the context (command, directory, version), what happened, what was
-  expected, an optional workaround, and, on the token form, the cost. (PR #N)
+  expected, an optional workaround, and, on the token form, the cost. (PR #65)
 
 ## 2. [0.9.0] — 2026-09-05
 
