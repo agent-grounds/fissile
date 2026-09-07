@@ -1,6 +1,6 @@
 [package]
 name = "fissile"
-version = "0.9.1-dev"
+version = "0.9.1"
 edition = "2024"
 rust-version = "1.85"
 description = "Steer agents toward leaner files — fewer tokens, architecture intact."

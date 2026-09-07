@@ -32,6 +32,8 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+## 2. [0.9.1] — 2026-09-07
+
 ### Added
 
 - Report intake: `.github/ISSUE_TEMPLATE/` carries four GitHub issue forms — bug
@@ -42,50 +44,9 @@ and at 0.x semver puts the minor number in charge of it.
   actionable: the context (command, directory, version), what happened, what was
   expected, an optional workaround, and, on the token form, the cost. (PR #65)
 
-## 2. [0.9.0] — 2026-09-05
-
-### Added
-
-- §FS-004-check-audit.2: `fissile audit --only <section>[,<section>]` prints the
-  named sections of the text report and nothing else, so tuning config or
-  pruning the registry stops paying for a findings block the reader is not
-  looking at. The names are the seven top-level keys of
-  `schema/audit.schema.json` — `findings`, `silenced`, `exceptions`, `top`,
-  `stale`, `loose`, `coverage` — and they render in that order whatever order
-  they were named in. Naming a section is the request to compute it, so `--only
-  coverage` needs no `--rule-coverage`; `--only top` still needs `--top <N>`,
-  which carries a count no default could stand in for. Selection reaches the
-  screen and nothing else: exit status is computed from the whole run, so a
-  standing hard overflow still exits non-zero under `--only coverage`. An
-  unknown or empty name is a usage error naming the valid set, and `--only`
-  with `--format json` is one too — `findings`, `silenced` and `exceptions` are
-  `required` in the schema, so a filtered object would not validate. `audit`
-  with no `--only` prints what it printed before, and the JSON surface is
-  unchanged. Resolves #15. (PR #63)
-- §GOAL-004-token-thrift.1, §FS-006-cli.2: `fissile audit --help` names the JSON
-  route, `fissile audit --format json --rule-coverage | jq .coverage`, and says
-  that `--format json` is the agent surface. The goals document has designated
-  it one since §GOAL-004-token-thrift was written; the screen's two examples
-  were both text and said so nowhere. (PR #63)
-
-### Changed
-
-- §FS-004-check-audit.2: `fissile::audit::AuditOptions` gains a public
-  `only: Option<Vec<Section>>` field, and `fissile::audit` gains the public
-  `Section` enum and the `SECTIONS` array that fixes its canonical order. A
-  library caller constructing the options with a struct literal must initialize
-  the new field, normally with `None`, which is the whole report. A 0.x source
-  break, so the minor number moves. (PR #63)
-
-- §AR-001-ci.2: CI's `grund check` job pins `grund` 0.13.0, up from 0.12.3, and
-  the agent entrypoint's grund managed block moves from v7 to v8 to match.
-  0.13.0 turns an unindexed declaration into a `grund check` error instead of a
-  warning and stops accepting the `prefix` spelling of `[[kinds]] kind`; this
-  repository already satisfied both, so pinning the new release found nothing
-  else to fix. (PR #64)
-
 ## 3. Older releases
 
+- [0.9.0](changelog/0.9.0.md) — 2026-09-05: - §FS-004-check-audit.2: `fissile audit --only <section>[,<section>]` prints the named sections of the text report and nothing else, so tuning config or pruning the registry stops paying for a findings block the reader is not looking at.
 - [0.8.3](changelog/0.8.3.md) — 2026-09-05: - §FS-001-config.8, §FS-002-init.2: the config's home is `.agent-grounds/fissile.toml`.
 - [0.8.2](changelog/0.8.2.md) — 2026-08-31: - §FS-001-config.0.1: the built-in defaults budget a Markdown file by how it is read.
 - [0.8.1](changelog/0.8.1.md) — 2026-08-30: - §FS-002-init.5: `init::Report` carries one `HookStatus` — `Installed`, `SkippedNotGit`, `SkippedByFlag` — in place of the `hook_skipped_not_git` boolean, so the hook step 2 reports is a value every path has to answer for instead of a flag that can be left unset.
