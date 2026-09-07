@@ -3,4 +3,4 @@
 # version-bump workflows rewrite this expectation alongside Cargo.toml.
 args = ["--version"]
 exit = 0
-stdout_equals = "fissile 0.9.1"
+stdout_equals = "fissile 0.9.2-dev"
