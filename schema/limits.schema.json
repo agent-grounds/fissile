@@ -18,6 +18,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "include", "unit", "priority"],
+      "dependentRequired": {
+        "soft": ["soft_edit_limit"],
+        "soft_edit_limit": ["soft"]
+      },
       "properties": {
         "id": {
           "type": "string",
@@ -44,6 +48,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "The soft limit, which warns; omitted when the rule declares none (FS-010-limits.4)."
+        },
+        "soft_edit_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The effective continuous staged over-soft edit allowance, including the default 5. Present exactly when `soft` is present (FS-010-limits.4)."
         },
         "hard": {
           "type": "integer",

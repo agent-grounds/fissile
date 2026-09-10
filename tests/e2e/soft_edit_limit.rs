@@ -736,6 +736,49 @@ fn a_merge_resolution_distinct_from_both_parents_counts_once() {
     );
 }
 
+#[test]
+fn a_parallel_reset_leaves_merge_history_incomplete() {
+    let work = Work::new("parallel-reset");
+    let config = DEFAULT_LIMIT_CONFIG.replace(
+        "soft = 2\nhard = 8",
+        "soft = 10\nsoft_edit_limit = 2\nhard = 20",
+    );
+    initialize(&work.0, &config);
+    let base = (1..=10)
+        .map(|line| format!("fn base_{line}() {{}}\n"))
+        .collect::<String>();
+    fs::write(work.0.join("src/debt.rs"), &base).unwrap();
+    commit(&work.0, "at soft limit");
+
+    git(&work.0, ["switch", "-qc", "side"]);
+    let side = base.replace("fn base_2() {}\n", "fn base_2() {}\nfn side() {}\n");
+    fs::write(work.0.join("src/debt.rs"), side).unwrap();
+    commit(&work.0, "side remains over soft");
+
+    git(&work.0, ["switch", "-q", "main"]);
+    let main = base.replace("fn base_8() {}\n", "fn base_8() {}\nfn main_edit() {}\n");
+    fs::write(work.0.join("src/debt.rs"), main).unwrap();
+    commit(&work.0, "main crosses soft");
+    fs::write(work.0.join("src/debt.rs"), &base).unwrap();
+    commit(&work.0, "main resets at soft");
+    git(
+        &work.0,
+        ["merge", "-q", "--no-ff", "side", "-m", "merge side"],
+    );
+    let mut staged = fs::read_to_string(work.0.join("src/debt.rs")).unwrap();
+    staged.push_str("fn staged() {}\n");
+    fs::write(work.0.join("src/debt.rs"), staged).unwrap();
+    stage(&work.0);
+
+    let checked = run(&work.0, ["check", "--staged", "--no-color"]);
+    assert_eq!(status(&checked), 0, "{}", output_text(&checked));
+    assert!(
+        stdout(&checked).contains("history incomplete; promotion disabled"),
+        "{}",
+        output_text(&checked)
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn token_history_stops_measuring_at_the_recent_reset() {

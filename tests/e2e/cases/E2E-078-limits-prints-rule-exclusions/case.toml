@@ -3,5 +3,5 @@
 args = ["limits", "--no-color"]
 exit = 0
 stdout_equals = """
-bytes-catch-all [**/*] bytes soft 1
-citable-spec [docs/**/*.md] exclude [docs/changelog/0.2.0.md] lines soft 1"""
+bytes-catch-all [**/*] bytes soft 1 soft-edit-limit 5
+citable-spec [docs/**/*.md] exclude [docs/changelog/0.2.0.md] lines soft 1 soft-edit-limit 5"""

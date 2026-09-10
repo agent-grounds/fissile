@@ -235,10 +235,6 @@ pub struct RuleSpec {
     pub unit: UnitSpec,
     #[serde(default)]
     pub soft: Option<u64>,
-    /// Continuous staged edits allowed while the rule remains over `soft`.
-    /// `None` preserves the version-1 default of five (§FS-001-config.3).
-    #[serde(default)]
-    pub soft_edit_limit: Option<u64>,
     #[serde(default)]
     pub hard: Option<u64>,
     #[serde(default)]
@@ -258,10 +254,6 @@ pub struct RuleSpec {
 }
 
 impl RuleSpec {
-    pub(crate) fn effective_soft_edit_limit(&self) -> u64 {
-        self.soft_edit_limit.unwrap_or(5)
-    }
-
     /// The message ID used at `severity`: the severity-specific field when set,
     /// otherwise the shared `message` (§FS-001-config.3).
     pub fn message_id(&self, severity: Severity) -> Option<&str> {
@@ -441,17 +433,7 @@ pub(crate) fn format_toml_error(error: &toml::de::Error, source: &str) -> String
 impl Config {
     /// Parse and validate a config document.
     pub fn parse(toml_text: &str) -> Result<Self, ConfigError> {
-        let config: Config = toml::from_str(toml_text).map_err(|error| ConfigError::Parse {
-            reason: format_toml_error(&error, toml_text),
-        })?;
-
-        if config.fissile_config_version != SUPPORTED_VERSION {
-            return Err(ConfigError::UnsupportedVersion {
-                version: config.fissile_config_version,
-            });
-        }
-
-        Ok(config)
+        parse_document(toml_text).map(|document| document.config)
     }
 
     /// The built-in default config (§FS-001-config.0): the same fully-populated
@@ -477,24 +459,15 @@ impl Config {
         root: &Path,
         explicit: Option<&Path>,
     ) -> Result<(Config, ConfigSource), ConfigError> {
-        if let Some(path) = explicit {
-            let full = root.join(path);
-            let text = fs::read_to_string(&full).map_err(|error| ConfigError::Io {
-                path: full.clone(),
-                reason: error.to_string(),
-            })?;
-            let config = Config::parse(&text).map_err(|error| error.in_file(full))?;
-            return Ok((config, ConfigSource::Explicit(path.to_path_buf())));
-        }
+        discover_document(root, explicit).map(|(document, source)| (document.config, source))
+    }
 
-        if let Some(config) = read_candidate(root, CONFIG_HOME)? {
-            let shadows_deprecated = root.join(DEPRECATED_CONFIG_HOME).exists();
-            return Ok((config, ConfigSource::Home { shadows_deprecated }));
-        }
-        if let Some(config) = read_candidate(root, DEPRECATED_CONFIG_HOME)? {
-            return Ok((config, ConfigSource::Deprecated));
-        }
-        Ok((Config::built_in(), ConfigSource::BuiltIn))
+    pub(crate) fn discover_with_soft_edit_limits(
+        root: &Path,
+        explicit: Option<&Path>,
+    ) -> Result<(Config, ConfigSource, SoftEditLimits), ConfigError> {
+        discover_document(root, explicit)
+            .map(|(document, source)| (document.config, source, document.soft_edit_limits))
     }
 
     /// Build a [`Checker`] from the rules and messages in this config.
@@ -512,20 +485,6 @@ impl Config {
                 return Err(ConfigError::EmptyInclude {
                     rule: spec.id.clone(),
                 });
-            }
-            if let Some(limit) = spec.soft_edit_limit {
-                if limit == 0 {
-                    return Err(ConfigError::InvalidSoftEditLimit {
-                        rule: spec.id.clone(),
-                        reason: "must be a positive integer".to_owned(),
-                    });
-                }
-                if spec.soft.is_none() {
-                    return Err(ConfigError::InvalidSoftEditLimit {
-                        rule: spec.id.clone(),
-                        reason: "requires a soft limit on the same rule".to_owned(),
-                    });
-                }
             }
 
             let soft_template = resolve_message(spec, Severity::Soft, &messages)?;
@@ -547,14 +506,115 @@ impl Config {
     }
 }
 
-/// One candidate in the discovery order: `None` when the file is not there, so
-/// the search goes on. A file that exists but does not parse is an error naming
-/// it rather than a miss — falling through would govern the repository by a
-/// document the reader did not mean to be in force (§FS-001-config.8.1).
-fn read_candidate(root: &Path, relative: &str) -> Result<Option<Config>, ConfigError> {
+#[derive(Clone, Debug, Default)]
+pub(crate) struct SoftEditLimits(HashMap<String, u64>);
+
+impl SoftEditLimits {
+    pub(crate) fn effective(&self, rule_id: &str) -> u64 {
+        self.0.get(rule_id).copied().unwrap_or(5)
+    }
+}
+
+struct ParsedDocument {
+    config: Config,
+    soft_edit_limits: SoftEditLimits,
+}
+
+fn parse_document(toml_text: &str) -> Result<ParsedDocument, ConfigError> {
+    let mut value: toml::Value = toml::from_str(toml_text).map_err(|error| ConfigError::Parse {
+        reason: format_toml_error(&error, toml_text),
+    })?;
+    let mut explicit_limits = Vec::new();
+    if let Some(rules) = value.get_mut("rules").and_then(toml::Value::as_array_mut) {
+        for rule in rules {
+            let limit = rule
+                .as_table_mut()
+                .and_then(|table| table.remove("soft_edit_limit"));
+            explicit_limits.push(limit);
+        }
+    }
+    let config: Config = value
+        .try_into()
+        .map_err(|error: toml::de::Error| ConfigError::Parse {
+            reason: format_toml_error(&error, toml_text),
+        })?;
+    if config.fissile_config_version != SUPPORTED_VERSION {
+        return Err(ConfigError::UnsupportedVersion {
+            version: config.fissile_config_version,
+        });
+    }
+
+    let mut limits = HashMap::new();
+    for (index, spec) in config.rules.iter().enumerate() {
+        let Some(value) = explicit_limits.get(index).and_then(Option::as_ref) else {
+            if spec.soft.is_some() {
+                limits.insert(spec.id.clone(), 5);
+            }
+            continue;
+        };
+        let Some(limit) = value
+            .as_integer()
+            .and_then(|limit| u64::try_from(limit).ok())
+        else {
+            return Err(ConfigError::InvalidSoftEditLimit {
+                rule: spec.id.clone(),
+                reason: "must be a positive integer".to_owned(),
+            });
+        };
+        if limit == 0 {
+            return Err(ConfigError::InvalidSoftEditLimit {
+                rule: spec.id.clone(),
+                reason: "must be a positive integer".to_owned(),
+            });
+        }
+        if spec.soft.is_none() {
+            return Err(ConfigError::InvalidSoftEditLimit {
+                rule: spec.id.clone(),
+                reason: "requires a soft limit on the same rule".to_owned(),
+            });
+        }
+        limits.insert(spec.id.clone(), limit);
+    }
+    Ok(ParsedDocument {
+        config,
+        soft_edit_limits: SoftEditLimits(limits),
+    })
+}
+
+fn discover_document(
+    root: &Path,
+    explicit: Option<&Path>,
+) -> Result<(ParsedDocument, ConfigSource), ConfigError> {
+    if let Some(path) = explicit {
+        let full = root.join(path);
+        let text = fs::read_to_string(&full).map_err(|error| ConfigError::Io {
+            path: full.clone(),
+            reason: error.to_string(),
+        })?;
+        let document = parse_document(&text).map_err(|error| error.in_file(full))?;
+        return Ok((document, ConfigSource::Explicit(path.to_path_buf())));
+    }
+
+    if let Some(document) = read_document_candidate(root, CONFIG_HOME)? {
+        let shadows_deprecated = root.join(DEPRECATED_CONFIG_HOME).exists();
+        return Ok((document, ConfigSource::Home { shadows_deprecated }));
+    }
+    if let Some(document) = read_document_candidate(root, DEPRECATED_CONFIG_HOME)? {
+        return Ok((document, ConfigSource::Deprecated));
+    }
+    Ok((
+        parse_document(crate::init::DEFAULT_CONFIG).expect("built-in default config is valid"),
+        ConfigSource::BuiltIn,
+    ))
+}
+
+fn read_document_candidate(
+    root: &Path,
+    relative: &str,
+) -> Result<Option<ParsedDocument>, ConfigError> {
     let full = root.join(relative);
     match fs::read_to_string(&full) {
-        Ok(text) => Config::parse(&text)
+        Ok(text) => parse_document(&text)
             .map_err(|error| error.in_file(full))
             .map(Some),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),

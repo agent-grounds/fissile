@@ -86,11 +86,11 @@ examples:
 pub const LIMITS_USAGE: &str = "\
 usage: fissile limits [--config <path>] [--format text|json] [--no-color]
 
-Prints every configured rule — id, include patterns, unit, and the soft and
-hard limits it declares — in the order the config declares them, whether or not
-any file matches. It measures nothing and never fails a build, so it answers
-even where a broken exception registry stops `check` and `audit`. Use the JSON
-form to generate or verify a documented limit instead of copying it by hand.
+Prints every configured rule — id, include patterns, unit, soft and hard limits,
+and the effective soft edit limit — in declaration order, whether or not any
+file matches. It measures nothing and never fails a build, so it answers even
+where a broken exception registry stops `check` and `audit`. Use the JSON form
+to generate or verify a documented limit instead of copying it by hand.
 
 examples:
   fissile limits

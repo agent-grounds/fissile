@@ -4,6 +4,6 @@
 args = ["limits", "--no-color"]
 exit = 0
 stdout_equals = """
-rust [src/**/*.rs, tests/**/*.rs] lines soft 2 hard 8
+rust [src/**/*.rs, tests/**/*.rs] lines soft 2 soft-edit-limit 5 hard 8
 assets [assets/**/*.png] bytes hard 4096
-notes [notes/*.md] lines soft 40"""
+notes [notes/*.md] lines soft 40 soft-edit-limit 5"""

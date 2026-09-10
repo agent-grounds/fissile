@@ -4,14 +4,14 @@
 //! Each distinct path uses one rename-following log, while every historical
 //! blob is read through one shared `git cat-file --batch` process.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use crate::config::Tokens;
-use crate::{FileMeasurement, Unit};
+use crate::{FileMeasurement, Glob, Unit};
 
 /// One standing staged soft finding whose history can affect this commit.
 #[derive(Clone, Debug)]
@@ -21,8 +21,17 @@ pub(crate) struct Candidate {
     pub unit: Unit,
     pub soft_limit: u64,
     pub edit_limit: u64,
+    pub include: Vec<Glob>,
+    pub exclude: Vec<Glob>,
     pub count_blank_lines: bool,
     pub count_comment_lines: bool,
+}
+
+impl Candidate {
+    fn applies_to(&self, path: &str) -> bool {
+        self.include.iter().any(|glob| glob.matches(path))
+            && !self.exclude.iter().any(|glob| glob.matches(path))
+    }
 }
 
 /// Provenance attached to a command finding, never to the public overflow.
@@ -48,6 +57,8 @@ struct Record {
     blob: Option<String>,
     path: String,
     establishes_absence: bool,
+    provable: bool,
+    graph_has_merge: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -106,18 +117,7 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
         }
     }
 
-    let requests: BTreeSet<(String, String)> = logs
-        .values()
-        .flatten()
-        .filter(|record| !shallow.contains(&record.commit))
-        .filter_map(|record| {
-            record
-                .blob
-                .as_ref()
-                .map(|blob| (blob.clone(), record.path.clone()))
-        })
-        .collect();
-    let measurements = batch_measure(root, tokens, &requests).unwrap_or_default();
+    let mut measurements = HistoryMeasurer::new(root, tokens);
 
     for (candidate, result) in candidates.iter().zip(&mut results) {
         let current = candidate.path.to_string_lossy().replace('\\', "/");
@@ -132,36 +132,68 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
             continue;
         };
 
-        for record in records {
+        for (index, record) in records.iter().enumerate() {
+            if !record.provable {
+                break;
+            }
             // A shallow boundary's apparent add is a synthetic root diff. Its
             // parent is unavailable, so neither the edit nor a reset is proven.
             if shallow.contains(&record.commit) {
                 break;
             }
+            if !candidate.applies_to(&record.path) {
+                result.history_complete = boundary_closes_graph(root, records, index);
+                break;
+            }
             let Some(blob) = &record.blob else {
-                result.history_complete = true;
+                result.history_complete = boundary_closes_graph(root, records, index);
                 break;
             };
-            let key = (blob.clone(), record.path.clone());
-            let Some(Some(measurement)) = measurements.get(&key) else {
+            let Ok(Some(measurement)) = measurements.measure(blob, &record.path) else {
                 break;
             };
-            let Some(actual) = measured_value(candidate, measurement) else {
+            let Some(actual) = measured_value(candidate, &measurement) else {
                 break;
             };
             if actual <= candidate.soft_limit {
-                result.history_complete = true;
+                result.history_complete = boundary_closes_graph(root, records, index);
                 break;
             }
             result.count += 1;
             if record.establishes_absence {
-                result.history_complete = true;
+                result.history_complete = boundary_closes_graph(root, records, index);
                 break;
             }
         }
     }
 
     results
+}
+
+/// A reset on one side of a merge is not a boundary for a parallel line. The
+/// later log records may be skipped only when every one is an ancestor of the
+/// boundary commit; otherwise the DAG is deliberately left incomplete.
+fn boundary_closes_graph(root: &Path, records: &[Record], boundary: usize) -> bool {
+    if !records[boundary].graph_has_merge {
+        return true;
+    }
+    let is_ancestor = |ancestor: &str, descendant: &str| {
+        Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["merge-base", "--is-ancestor", ancestor, descendant])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    let boundary_commit = &records[boundary].commit;
+    records[..boundary]
+        .iter()
+        .all(|newer| is_ancestor(boundary_commit, &newer.commit))
+        && records[boundary + 1..]
+            .iter()
+            .all(|older| is_ancestor(&older.commit, boundary_commit))
 }
 
 fn measured_value(candidate: &Candidate, measurement: &FileMeasurement) -> Option<u64> {
@@ -220,19 +252,23 @@ fn staged_seeds(root: &Path) -> io::Result<HashMap<String, Seed>> {
     Ok(seeds)
 }
 
-/// One first-parent line is the sequence of committed versions the staged
-/// commit extends. `--follow` carries that identity through established renames.
+/// Complete reachable history in topological order. `-m` exposes one merge diff
+/// per changed parent; [`parse_log`] uses those parent views to distinguish an
+/// importing merge from a resolution that introduced a new version.
 fn file_log(root: &Path, path: &str) -> io::Result<Vec<Record>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
         .args([
             "log",
-            "--first-parent",
+            "--full-history",
+            "--topo-order",
             "--follow",
             "--root",
+            "-m",
+            "--find-renames",
             "--no-abbrev",
-            "--format=format:%x1e%H%x00",
+            "--format=format:%x1e%H%x00%P%x00",
             "--raw",
             "-z",
             "--",
@@ -246,7 +282,20 @@ fn file_log(root: &Path, path: &str) -> io::Result<Vec<Record>> {
 }
 
 fn parse_log(output: &[u8]) -> Vec<Record> {
-    let mut records = Vec::new();
+    #[derive(Clone)]
+    struct Entry {
+        blob: Option<String>,
+        path: String,
+        establishes_absence: bool,
+    }
+
+    struct Commit {
+        id: String,
+        parent_count: usize,
+        entries: Vec<Entry>,
+    }
+
+    let mut commits: Vec<Commit> = Vec::new();
     for chunk in output
         .split(|byte| *byte == 0x1e)
         .filter(|part| !part.is_empty())
@@ -257,36 +306,84 @@ fn parse_log(output: &[u8]) -> Vec<Record> {
         let commit = String::from_utf8_lossy(&chunk[..header_end])
             .trim()
             .to_owned();
-        let fields: Vec<String> = chunk[header_end + 1..]
+        let after_commit = &chunk[header_end + 1..];
+        let Some(parents_end) = after_commit.iter().position(|byte| *byte == 0) else {
+            continue;
+        };
+        let parent_count = String::from_utf8_lossy(&after_commit[..parents_end])
+            .split_whitespace()
+            .count();
+        let fields: Vec<String> = after_commit[parents_end + 1..]
             .split(|byte| *byte == 0)
             .map(|field| String::from_utf8_lossy(field).trim().to_owned())
             .filter(|field| !field.is_empty())
             .collect();
-        let Some(meta_index) = fields.iter().position(|field| field.starts_with(':')) else {
-            continue;
-        };
-        let meta: Vec<&str> = fields[meta_index].split_whitespace().collect();
-        if meta.len() < 5 {
-            continue;
+        let mut entries = Vec::new();
+        let mut index = 0;
+        while index < fields.len() {
+            if !fields[index].starts_with(':') {
+                index += 1;
+                continue;
+            }
+            let meta: Vec<&str> = fields[index].split_whitespace().collect();
+            if meta.len() < 5 {
+                index += 1;
+                continue;
+            }
+            let status = meta[4];
+            let path_offset = usize::from(status.starts_with('R') || status.starts_with('C')) + 1;
+            let Some(path) = fields.get(index + path_offset) else {
+                break;
+            };
+            let blob = (!status.starts_with('D') && !meta[3].bytes().all(|byte| byte == b'0'))
+                .then(|| meta[3].to_owned());
+            entries.push(Entry {
+                blob,
+                path: path.clone(),
+                establishes_absence: status.starts_with('A'),
+            });
+            index += path_offset + 1;
         }
-        let status = meta[4];
-        let path_index = meta_index + 1;
-        let path = if status.starts_with('R') || status.starts_with('C') {
-            fields.get(path_index + 1)
+        if let Some(existing) = commits.iter_mut().find(|item| item.id == commit) {
+            existing.entries.extend(entries);
         } else {
-            fields.get(path_index)
-        };
-        let Some(path) = path else { continue };
-        let blob = (!status.starts_with('D') && !meta[3].bytes().all(|byte| byte == b'0'))
-            .then(|| meta[3].to_owned());
-        records.push(Record {
-            commit,
-            blob,
-            path: path.clone(),
-            establishes_absence: status.starts_with('A'),
-        });
+            commits.push(Commit {
+                id: commit,
+                parent_count,
+                entries,
+            });
+        }
     }
-    records
+
+    let graph_has_merge = commits.iter().any(|commit| commit.parent_count > 1);
+    commits
+        .into_iter()
+        .filter_map(|commit| {
+            if commit.entries.is_empty() {
+                return None;
+            }
+            // A merge missing a parent diff has the same file version as that
+            // parent. It imports the branch edits but is not a second edit.
+            if commit.parent_count > 1 && commit.entries.len() < commit.parent_count {
+                return None;
+            }
+            let first = &commit.entries[0];
+            let same_result = commit.entries.iter().all(|entry| {
+                entry.blob == first.blob
+                    && entry.path == first.path
+                    && entry.establishes_absence == first.establishes_absence
+            });
+            Some(Record {
+                commit: commit.id,
+                blob: first.blob.clone(),
+                path: first.path.clone(),
+                establishes_absence: first.establishes_absence,
+                provable: (commit.parent_count <= 1 && commit.entries.len() == 1)
+                    || (commit.entries.len() == commit.parent_count && same_result),
+                graph_has_merge,
+            })
+        })
+        .collect()
 }
 
 fn shallow_commits(root: &Path) -> io::Result<HashSet<String>> {
@@ -311,62 +408,105 @@ fn shallow_commits(root: &Path) -> io::Result<HashSet<String>> {
     }
 }
 
-/// Read and measure all needed historical objects through one Git process.
-fn batch_measure(
-    root: &Path,
-    tokens: &Tokens,
-    requests: &BTreeSet<(String, String)>,
-) -> io::Result<HashMap<(String, String), Option<FileMeasurement>>> {
-    if requests.is_empty() {
-        return Ok(HashMap::new());
-    }
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["cat-file", "--batch"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()?;
-    let mut input = child.stdin.take().expect("piped git stdin");
-    let object_ids: Vec<String> = requests.iter().map(|(blob, _)| blob.clone()).collect();
-    let writer = std::thread::spawn(move || -> io::Result<()> {
-        for object in object_ids {
-            writeln!(input, "{object}")?;
-        }
-        Ok(())
-    });
-    let stdout = child.stdout.take().expect("piped git stdout");
-    let mut reader = BufReader::new(stdout);
-    let mut measured = HashMap::new();
+/// Lazy shared `cat-file` session. A history version is requested only when the
+/// newest-to-oldest walk reaches it, and the cache shares work across rules.
+struct HistoryMeasurer<'a> {
+    root: &'a Path,
+    tokens: &'a Tokens,
+    process: Option<CatFile>,
+    cache: HashMap<(String, String), Option<FileMeasurement>>,
+}
 
-    for (blob, path) in requests {
+struct CatFile {
+    child: Child,
+    input: ChildStdin,
+    output: BufReader<ChildStdout>,
+}
+
+impl<'a> HistoryMeasurer<'a> {
+    fn new(root: &'a Path, tokens: &'a Tokens) -> Self {
+        Self {
+            root,
+            tokens,
+            process: None,
+            cache: HashMap::new(),
+        }
+    }
+
+    fn measure(&mut self, blob: &str, path: &str) -> io::Result<Option<FileMeasurement>> {
+        let key = (blob.to_owned(), path.to_owned());
+        if let Some(measurement) = self.cache.get(&key) {
+            return Ok(measurement.clone());
+        }
+        if self.process.is_none() {
+            self.process = Some(CatFile::spawn(self.root)?);
+        }
+        let content = self
+            .process
+            .as_mut()
+            .expect("cat-file process initialized")
+            .read(blob)?;
+        let measurement = match content {
+            Some(content) => {
+                crate::scan::measure_history_blob(self.root, path, &content, self.tokens).ok()
+            }
+            None => None,
+        };
+        self.cache.insert(key, measurement.clone());
+        Ok(measurement)
+    }
+}
+
+impl CatFile {
+    fn spawn(root: &Path) -> io::Result<Self> {
+        let mut child = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["cat-file", "--batch"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()?;
+        let input = child.stdin.take().expect("piped git stdin");
+        let output = BufReader::new(child.stdout.take().expect("piped git stdout"));
+        Ok(Self {
+            child,
+            input,
+            output,
+        })
+    }
+
+    fn read(&mut self, object: &str) -> io::Result<Option<Vec<u8>>> {
+        writeln!(self.input, "{object}")?;
+        self.input.flush()?;
         let mut header = String::new();
-        if reader.read_line(&mut header)? == 0 {
-            break;
+        if self.output.read_line(&mut header)? == 0 {
+            return Err(io::Error::other("git cat-file ended before its response"));
         }
         let fields: Vec<&str> = header.split_whitespace().collect();
-        if fields.last() == Some(&"missing") || fields.len() < 3 {
-            measured.insert((blob.clone(), path.clone()), None);
-            continue;
+        if fields.last() == Some(&"missing") {
+            return Ok(None);
+        }
+        if fields.len() < 3 {
+            return Err(io::Error::other("invalid git cat-file header"));
         }
         let size: usize = fields[2]
             .parse()
             .map_err(|_| io::Error::other("invalid git cat-file size"))?;
         let mut content = vec![0; size];
-        reader.read_exact(&mut content)?;
+        self.output.read_exact(&mut content)?;
         let mut newline = [0];
-        reader.read_exact(&mut newline)?;
-        let measurement = crate::scan::measure_history_blob(root, path, &content, tokens).ok();
-        measured.insert((blob.clone(), path.clone()), measurement);
+        self.output.read_exact(&mut newline)?;
+        Ok(Some(content))
     }
+}
 
-    let write_result = writer
-        .join()
-        .map_err(|_| io::Error::other("git cat-file input writer panicked"))?;
-    write_result?;
-    if !child.wait()?.success() {
-        return Err(io::Error::other("git cat-file --batch failed"));
+impl Drop for CatFile {
+    fn drop(&mut self) {
+        // The process owns no state after its requested blobs were read; never
+        // turn cleanup trouble into an error after its evidence was consumed.
+        let _ = self.input.flush();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
-    Ok(measured)
 }

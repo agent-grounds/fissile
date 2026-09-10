@@ -9,3 +9,23 @@ until = "indefinite"
 reason = """
 GitHub resolves a workflow's job graph inside one file — `needs:` cannot name a job in another workflow — so splitting this one would break the release ordering it exists to express. What is extractable already lives in scripts/release/ and the jobs call it; what remains is the graph, and the hard budget still caps its growth.
 """
+[[exceptions]]
+path = "examples/fissile.toml"
+match = "exact"
+rules = ["config-toml"]
+kind = "structural"
+max_accepted = { value = 200, unit = "lines" }
+until = "indefinite"
+reason = """
+This worked example is maintained as one consumable TOML document; a sibling split would no longer represent the artifact users read and copy.
+"""
+[[exceptions]]
+path = "src/templates/fissile.default.toml"
+match = "exact"
+rules = ["config-toml"]
+kind = "structural"
+max_accepted = { value = 200, unit = "lines" }
+until = "indefinite"
+reason = """
+The generated default is embedded and maintained as one consumable TOML document; a sibling split would no longer represent the artifact fissile init emits.
+"""

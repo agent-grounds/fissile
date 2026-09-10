@@ -4,7 +4,7 @@
 args = ["limits", "--no-color"]
 exit = 0
 stdout_equals = """
-from-the-config-home [notes/*.md] lines soft 40"""
+from-the-config-home [notes/*.md] lines soft 40 soft-edit-limit 5"""
 stderr_contains = [
   ".agents/fissile.toml is ignored; .agent-grounds/fissile.toml is the config in effect",
 ]
