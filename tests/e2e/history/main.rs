@@ -70,7 +70,13 @@ fn scratch(label: &str) -> PathBuf {
     let parent = std::env::var_os("FISSILE_HISTORY_TMP")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            PathBuf::from(std::env::var_os("HOME").expect("HOME locates ~/f/tmp")).join("f/tmp")
+            // Windows names the home directory `USERPROFILE`, so `HOME` alone
+            // panics every case on that runner. Same fallback as the sibling
+            // soft-edit suite, which is what makes both portable.
+            let home = std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .expect("HOME or USERPROFILE names the test scratch filesystem");
+            PathBuf::from(home).join("f/tmp")
         });
     fs::create_dir_all(&parent).expect("create history fixture scratch directory");
     parent.join(format!(
