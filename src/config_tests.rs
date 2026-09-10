@@ -199,6 +199,46 @@ fn load_names_the_file_in_parse_errors() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+#[test]
+fn sidecar_parsing_preserves_schema_error_locations() {
+    let text = SAMPLE.replace(
+        "count_blank_lines = false",
+        "soft_edit_limit = 3\ncount_blank_linez = false",
+    );
+    let offending_line = text
+        .lines()
+        .position(|line| line.contains("count_blank_linez"))
+        .expect("fixture contains typo")
+        + 1;
+    let rendered = Config::parse(&text)
+        .expect_err("unknown rule field is rejected")
+        .to_string();
+    assert!(
+        rendered.contains(&format!("at line {offending_line} column 1")),
+        "diagnostic lost its source location: {rendered}"
+    );
+}
+
+#[test]
+fn edit_limits_follow_declaration_order_even_when_ids_repeat() {
+    let text = format!(
+        "{SAMPLE}\n{}",
+        r#"
+[[rules]]
+id = "rust"
+include = ["assets/**"]
+unit = "bytes"
+soft = 20
+soft_edit_limit = 7
+message = "split-rust"
+"#
+    )
+    .replace("soft = 200", "soft = 200\nsoft_edit_limit = 2");
+    let document = parse_document(&text).expect("duplicate IDs are valid across units");
+    assert_eq!(document.soft_edit_limits.effective(0), 2);
+    assert_eq!(document.soft_edit_limits.effective(1), 7);
+}
+
 /// §FS-001-config.8.1: discovery stops at the first candidate that exists. A
 /// config that will not parse is an error naming it, never a miss that falls
 /// through to the deprecated path — that would govern the repository by a

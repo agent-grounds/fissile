@@ -54,7 +54,8 @@ pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
         Format::Text => rules
             .iter()
             .copied()
-            .map(|scope| text_line(scope, &soft_edit_limits))
+            .enumerate()
+            .map(|(declaration, scope)| text_line(scope, soft_edit_limits.effective(declaration)))
             .collect::<Vec<_>>()
             .join("\n"),
         Format::Json => Json::Object(vec![(
@@ -63,7 +64,10 @@ pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
                 rules
                     .iter()
                     .copied()
-                    .map(|scope| rule_json(scope, &soft_edit_limits))
+                    .enumerate()
+                    .map(|(declaration, scope)| {
+                        rule_json(scope, soft_edit_limits.effective(declaration))
+                    })
                     .collect(),
             ),
         )])
@@ -78,7 +82,7 @@ pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
 /// `<id> [<include>, …] <unit> soft <N> hard <M>`, with only the thresholds the
 /// rule declares — a placeholder for the other would state a limit the config
 /// does not set (§FS-010-limits.3).
-fn text_line(scope: ScopedRule<'_>, soft_edit_limits: &crate::config::SoftEditLimits) -> String {
+fn text_line(scope: ScopedRule<'_>, soft_edit_limit: u64) -> String {
     let rule = scope.rule;
     let mut line = format!(
         "{} [{}]",
@@ -98,10 +102,7 @@ fn text_line(scope: ScopedRule<'_>, soft_edit_limits: &crate::config::SoftEditLi
     }
     line.push_str(&format!(" {}", rule.budget.unit));
     if let Some(soft) = rule.budget.soft {
-        line.push_str(&format!(
-            " soft {soft} soft-edit-limit {}",
-            soft_edit_limits.effective(&rule.id)
-        ));
+        line.push_str(&format!(" soft {soft} soft-edit-limit {}", soft_edit_limit));
     }
     if let Some(hard) = rule.budget.hard {
         line.push_str(&format!(" hard {hard}"));
@@ -128,7 +129,7 @@ fn include_patterns(selector: &Selector) -> Vec<String> {
 /// One rule as the machine surface (§FS-010-limits.4): the text form's fields,
 /// plus what a generator needs and a terminal reader does not. A field that
 /// would describe nothing is omitted, never nulled.
-fn rule_json(scope: ScopedRule<'_>, soft_edit_limits: &crate::config::SoftEditLimits) -> Json {
+fn rule_json(scope: ScopedRule<'_>, soft_edit_limit: u64) -> Json {
     let rule = scope.rule;
     let mut fields = vec![
         ("id", Json::str(rule.id.clone())),
@@ -157,10 +158,7 @@ fn rule_json(scope: ScopedRule<'_>, soft_edit_limits: &crate::config::SoftEditLi
     fields.push(("unit", Json::str(rule.budget.unit.to_string())));
     if let Some(soft) = rule.budget.soft {
         fields.push(("soft", Json::UInt(soft)));
-        fields.push((
-            "soft_edit_limit",
-            Json::UInt(soft_edit_limits.effective(&rule.id)),
-        ));
+        fields.push(("soft_edit_limit", Json::UInt(soft_edit_limit)));
     }
     if let Some(hard) = rule.budget.hard {
         fields.push(("hard", Json::UInt(hard)));

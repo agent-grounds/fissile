@@ -49,7 +49,8 @@ enum Blocked {
 }
 
 pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
-    let loaded = cli::load(&options.root, options.config_path.as_deref())?;
+    let (loaded, soft_edit_limits) =
+        cli::load_with_soft_edit_limits(&options.root, options.config_path.as_deref())?;
     let files = collect_files(options, &loaded)?;
     let format = options
         .format
@@ -87,18 +88,19 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
                         hit.rule.id == overflow.rule_id && hit.rule.budget.unit == overflow.unit
                     })
                     .expect("reported overflow came from an effective rule");
-                let spec = loaded
-                    .config
-                    .rules
+                let declaration = loaded
+                    .checker
+                    .rules()
                     .iter()
-                    .find(|spec| spec.id == overflow.rule_id)
+                    .position(|rule| std::ptr::eq(rule, hit.rule))
                     .expect("compiled rule came from config");
+                let spec = &loaded.config.rules[declaration];
                 history_candidates.push(Candidate {
                     path: overflow.path.clone(),
                     rule_id: overflow.rule_id.clone(),
                     unit: overflow.unit,
                     soft_limit: overflow.limit,
-                    edit_limit: loaded.soft_edit_limits.effective(&spec.id),
+                    edit_limit: soft_edit_limits.effective(declaration),
                     include: spec.include.iter().map(crate::Glob::new).collect(),
                     exclude: spec.exclude.iter().map(crate::Glob::new).collect(),
                     count_blank_lines: hit.rule.count_blank_lines,

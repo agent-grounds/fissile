@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+mod config_document;
+
 use crate::{Budget, Checker, FissileError, Glob, MessageTemplate, Rule, Selector, Severity, Unit};
 
 /// The only supported major config version (§FS-001-config.1).
@@ -507,11 +509,11 @@ impl Config {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct SoftEditLimits(HashMap<String, u64>);
+pub(crate) struct SoftEditLimits(Vec<u64>);
 
 impl SoftEditLimits {
-    pub(crate) fn effective(&self, rule_id: &str) -> u64 {
-        self.0.get(rule_id).copied().unwrap_or(5)
+    pub(crate) fn effective(&self, declaration: usize) -> u64 {
+        self.0.get(declaration).copied().unwrap_or(5)
     }
 }
 
@@ -521,64 +523,83 @@ struct ParsedDocument {
 }
 
 fn parse_document(toml_text: &str) -> Result<ParsedDocument, ConfigError> {
-    let mut value: toml::Value = toml::from_str(toml_text).map_err(|error| ConfigError::Parse {
-        reason: format_toml_error(&error, toml_text),
-    })?;
-    let mut explicit_limits = Vec::new();
-    if let Some(rules) = value.get_mut("rules").and_then(toml::Value::as_array_mut) {
-        for rule in rules {
-            let limit = rule
-                .as_table_mut()
-                .and_then(|table| table.remove("soft_edit_limit"));
-            explicit_limits.push(limit);
-        }
-    }
-    let config: Config = value
-        .try_into()
-        .map_err(|error: toml::de::Error| ConfigError::Parse {
-            reason: format_toml_error(&error, toml_text),
-        })?;
+    let (config, explicit_limits) = config_document::parse(toml_text)?;
     if config.fissile_config_version != SUPPORTED_VERSION {
         return Err(ConfigError::UnsupportedVersion {
             version: config.fissile_config_version,
         });
     }
 
-    let mut limits = HashMap::new();
+    let mut limits = Vec::with_capacity(config.rules.len());
     for (index, spec) in config.rules.iter().enumerate() {
         let Some(value) = explicit_limits.get(index).and_then(Option::as_ref) else {
-            if spec.soft.is_some() {
-                limits.insert(spec.id.clone(), 5);
-            }
+            limits.push(5);
             continue;
         };
         let Some(limit) = value
+            .get_ref()
             .as_integer()
             .and_then(|limit| u64::try_from(limit).ok())
         else {
-            return Err(ConfigError::InvalidSoftEditLimit {
-                rule: spec.id.clone(),
-                reason: "must be a positive integer".to_owned(),
-            });
+            return Err(invalid_soft_edit_limit(
+                toml_text,
+                value.span(),
+                spec,
+                "must be a positive integer",
+            ));
         };
         if limit == 0 {
-            return Err(ConfigError::InvalidSoftEditLimit {
-                rule: spec.id.clone(),
-                reason: "must be a positive integer".to_owned(),
-            });
+            return Err(invalid_soft_edit_limit(
+                toml_text,
+                value.span(),
+                spec,
+                "must be a positive integer",
+            ));
         }
         if spec.soft.is_none() {
-            return Err(ConfigError::InvalidSoftEditLimit {
-                rule: spec.id.clone(),
-                reason: "requires a soft limit on the same rule".to_owned(),
-            });
+            return Err(invalid_soft_edit_limit(
+                toml_text,
+                value.span(),
+                spec,
+                "requires a soft limit on the same rule",
+            ));
         }
-        limits.insert(spec.id.clone(), limit);
+        limits.push(limit);
     }
     Ok(ParsedDocument {
         config,
         soft_edit_limits: SoftEditLimits(limits),
     })
+}
+
+fn invalid_soft_edit_limit(
+    source: &str,
+    span: std::ops::Range<usize>,
+    spec: &RuleSpec,
+    reason: &str,
+) -> ConfigError {
+    let location = source_location(source, span.start);
+    ConfigError::Parse {
+        reason: format!(
+            "rule {} has invalid soft_edit_limit: {reason}{location}",
+            spec.id
+        ),
+    }
+}
+
+fn source_location(source: &str, offset: usize) -> String {
+    let start = offset.min(source.len());
+    let mut line = 1usize;
+    let mut column = 1usize;
+    for &byte in &source.as_bytes()[..start] {
+        if byte == b'\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+    format!(" at line {line} column {column}")
 }
 
 fn discover_document(
@@ -650,10 +671,6 @@ pub enum ConfigError {
         rule: String,
         severity: Severity,
     },
-    InvalidSoftEditLimit {
-        rule: String,
-        reason: String,
-    },
     Engine(FissileError),
     /// A load-time error tagged with the document it came from
     /// (§FS-001-config.1): `Config::load` wraps, `Config::parse` stays pathless.
@@ -700,9 +717,6 @@ impl fmt::Display for ConfigError {
                 f,
                 "rule {rule} declares a {severity} limit with no message; set {severity}_message or message"
             ),
-            ConfigError::InvalidSoftEditLimit { rule, reason } => {
-                write!(f, "rule {rule} has invalid soft_edit_limit: {reason}")
-            }
             ConfigError::Engine(error) => write!(f, "{error}"),
         }
     }
