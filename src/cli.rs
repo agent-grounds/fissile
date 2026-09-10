@@ -55,7 +55,6 @@ pub struct Loaded {
     /// (§FS-001-config.8.2).
     pub source: ConfigSource,
     pub checker: Checker,
-    pub(crate) soft_edit_limits: SoftEditLimits,
     pub registries: Registries,
     pub root: PathBuf,
     pub soft_registry: PathBuf,
@@ -64,9 +63,16 @@ pub struct Loaded {
 
 /// Load and validate everything a `check`/`audit`/`exception` run needs.
 pub fn load(root: &Path, config_path: Option<&Path>) -> Result<Loaded, CommandError> {
-    let loaded = load_unvalidated(root, config_path)?;
+    load_with_soft_edit_limits(root, config_path).map(|(loaded, _)| loaded)
+}
+
+pub(crate) fn load_with_soft_edit_limits(
+    root: &Path,
+    config_path: Option<&Path>,
+) -> Result<(Loaded, SoftEditLimits), CommandError> {
+    let (loaded, soft_edit_limits) = load_unvalidated_with_soft_edit_limits(root, config_path)?;
     loaded.registries.validate_against(loaded.checker.rules())?;
-    Ok(loaded)
+    Ok((loaded, soft_edit_limits))
 }
 
 /// The same load, stopping before the entries are held against the rules — the
@@ -76,6 +82,13 @@ pub fn load(root: &Path, config_path: Option<&Path>) -> Result<Loaded, CommandEr
 /// (§FS-009-exception-remove.2). Everything a command needs to *read* the
 /// document still applies here — a registry that will not parse is refused.
 pub fn load_unvalidated(root: &Path, config_path: Option<&Path>) -> Result<Loaded, CommandError> {
+    load_unvalidated_with_soft_edit_limits(root, config_path).map(|(loaded, _)| loaded)
+}
+
+fn load_unvalidated_with_soft_edit_limits(
+    root: &Path,
+    config_path: Option<&Path>,
+) -> Result<(Loaded, SoftEditLimits), CommandError> {
     let (config, source, soft_edit_limits) =
         Config::discover_with_soft_edit_limits(root, config_path)?;
     let checker = config.to_checker()?;
@@ -101,16 +114,18 @@ pub fn load_unvalidated(root: &Path, config_path: Option<&Path>) -> Result<Loade
     // (§FS-003-exceptions.2.3).
     .map_err(|error| error.naming_hard_registry(&config.exceptions.hard_registry))?;
 
-    Ok(Loaded {
-        config,
-        source,
-        checker,
+    Ok((
+        Loaded {
+            config,
+            source,
+            checker,
+            registries,
+            root: root.to_path_buf(),
+            soft_registry,
+            hard_registry,
+        },
         soft_edit_limits,
-        registries,
-        root: root.to_path_buf(),
-        soft_registry,
-        hard_registry,
-    })
+    ))
 }
 
 /// Load the repair-only view for soft `exception remove`. Unlike
@@ -121,8 +136,7 @@ pub(crate) fn load_for_soft_removal(
     root: &Path,
     config_path: Option<&Path>,
 ) -> Result<(Loaded, Vec<RemovalEntry>), CommandError> {
-    let (config, source, soft_edit_limits) =
-        Config::discover_with_soft_edit_limits(root, config_path)?;
+    let (config, source) = Config::discover(root, config_path)?;
     let checker = config.to_checker()?;
 
     let soft_registry = PathBuf::from(&config.exceptions.soft_registry);
@@ -146,7 +160,6 @@ pub(crate) fn load_for_soft_removal(
             config,
             source,
             checker,
-            soft_edit_limits,
             registries,
             root: root.to_path_buf(),
             soft_registry,

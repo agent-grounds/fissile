@@ -737,7 +737,7 @@ fn a_merge_resolution_distinct_from_both_parents_counts_once() {
 }
 
 #[test]
-fn a_parallel_reset_leaves_merge_history_incomplete() {
+fn parallel_reset_frontiers_close_independently() {
     let work = Work::new("parallel-reset");
     let config = DEFAULT_LIMIT_CONFIG.replace(
         "soft = 2\nhard = 8",
@@ -751,31 +751,83 @@ fn a_parallel_reset_leaves_merge_history_incomplete() {
     commit(&work.0, "at soft limit");
 
     git(&work.0, ["switch", "-qc", "side"]);
-    let side = base.replace("fn base_2() {}\n", "fn base_2() {}\nfn side() {}\n");
+    let side = base.replace("fn base_2() {}", "fn side_reset() {}");
     fs::write(work.0.join("src/debt.rs"), side).unwrap();
-    commit(&work.0, "side remains over soft");
+    commit(&work.0, "side reset at soft");
 
     git(&work.0, ["switch", "-q", "main"]);
-    let main = base.replace("fn base_8() {}\n", "fn base_8() {}\nfn main_edit() {}\n");
+    let main = base.replace("fn base_8() {}", "fn main_reset() {}");
     fs::write(work.0.join("src/debt.rs"), main).unwrap();
-    commit(&work.0, "main crosses soft");
-    fs::write(work.0.join("src/debt.rs"), &base).unwrap();
     commit(&work.0, "main resets at soft");
-    git(
-        &work.0,
-        ["merge", "-q", "--no-ff", "side", "-m", "merge side"],
-    );
+    git(&work.0, ["merge", "-q", "--no-ff", "--no-commit", "side"]);
+    let mut merged = fs::read_to_string(work.0.join("src/debt.rs")).unwrap();
+    merged.push_str("fn merge_crossing() {}\n");
+    fs::write(work.0.join("src/debt.rs"), merged).unwrap();
+    commit(&work.0, "merge crosses soft");
     let mut staged = fs::read_to_string(work.0.join("src/debt.rs")).unwrap();
     staged.push_str("fn staged() {}\n");
     fs::write(work.0.join("src/debt.rs"), staged).unwrap();
     stage(&work.0);
 
     let checked = run(&work.0, ["check", "--staged", "--no-color"]);
-    assert_eq!(status(&checked), 0, "{}", output_text(&checked));
+    assert_eq!(status(&checked), 1, "{}", output_text(&checked));
     assert!(
-        stdout(&checked).contains("history incomplete; promotion disabled"),
+        stdout(&checked).contains("soft edits 2/2; promoted to blocking"),
         "{}",
         output_text(&checked)
+    );
+}
+
+#[test]
+fn duplicate_rule_ids_keep_declaration_edit_limits() {
+    let work = Work::new("duplicate-rule-edit-limits");
+    let config = r#"
+fissile_config_version = 1
+
+[[messages]]
+id = "split-now"
+text = "Split now."
+
+[[rules]]
+id = "duplicate"
+include = ["src/**/*.rs"]
+unit = "bytes"
+soft = 2
+soft_edit_limit = 2
+hard = 1000
+message = "split-now"
+
+[[rules]]
+id = "duplicate"
+include = ["src/**/*.rs"]
+unit = "lines"
+soft = 2
+soft_edit_limit = 7
+hard = 8
+message = "split-now"
+"#;
+    initialize(&work.0, config);
+    write_lines(&work.0, 3);
+    commit(&work.0, "both rules over soft");
+    write_lines(&work.0, 4);
+    stage(&work.0);
+
+    let checked = run(&work.0, ["check", "--staged", "--no-color"]);
+    assert_eq!(status(&checked), 1, "{}", output_text(&checked));
+    let checked_text = stdout(&checked);
+    assert!(checked_text.contains("soft edits 2/2; promoted to blocking"));
+    assert!(checked_text.contains("soft edits 2/7"));
+
+    let limits = run(&work.0, ["limits", "--format", "json"]);
+    assert_eq!(status(&limits), 0, "{}", output_text(&limits));
+    let limits_text = stdout(&limits);
+    assert!(
+        limits_text.contains(r#""unit":"bytes","soft":2,"soft_edit_limit":2"#),
+        "{limits_text}"
+    );
+    assert!(
+        limits_text.contains(r#""unit":"lines","soft":2,"soft_edit_limit":7"#),
+        "{limits_text}"
     );
 }
 

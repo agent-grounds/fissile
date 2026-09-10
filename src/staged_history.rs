@@ -58,7 +58,6 @@ struct Record {
     path: String,
     establishes_absence: bool,
     provable: bool,
-    graph_has_merge: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -132,68 +131,116 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
             continue;
         };
 
-        for (index, record) in records.iter().enumerate() {
+        let mut frontier = (!records.is_empty())
+            .then_some(0)
+            .into_iter()
+            .collect::<Vec<_>>();
+        let mut visited = HashSet::new();
+        let mut ancestry = Ancestry::new(root);
+        let mut closed_frontiers = 0usize;
+        let mut proof_failed = false;
+        while let Some(index) = frontier.pop() {
+            if !visited.insert(index) {
+                continue;
+            }
+            let record = &records[index];
             if !record.provable {
+                proof_failed = true;
                 break;
             }
             // A shallow boundary's apparent add is a synthetic root diff. Its
             // parent is unavailable, so neither the edit nor a reset is proven.
             if shallow.contains(&record.commit) {
+                proof_failed = true;
                 break;
             }
             if !candidate.applies_to(&record.path) {
-                result.history_complete = boundary_closes_graph(root, records, index);
-                break;
+                closed_frontiers += 1;
+                continue;
             }
             let Some(blob) = &record.blob else {
-                result.history_complete = boundary_closes_graph(root, records, index);
-                break;
+                closed_frontiers += 1;
+                continue;
             };
             let Ok(Some(measurement)) = measurements.measure(blob, &record.path) else {
+                proof_failed = true;
                 break;
             };
             let Some(actual) = measured_value(candidate, &measurement) else {
+                proof_failed = true;
                 break;
             };
             if actual <= candidate.soft_limit {
-                result.history_complete = boundary_closes_graph(root, records, index);
-                break;
+                closed_frontiers += 1;
+                continue;
             }
             result.count += 1;
             if record.establishes_absence {
-                result.history_complete = boundary_closes_graph(root, records, index);
+                closed_frontiers += 1;
+                continue;
+            }
+            let predecessors = direct_predecessors(records, index, &mut ancestry);
+            if predecessors.is_empty() {
+                proof_failed = true;
                 break;
             }
+            frontier.extend(predecessors);
         }
+        result.history_complete = !proof_failed && closed_frontiers > 0 && frontier.is_empty();
     }
 
     results
 }
 
-/// A reset on one side of a merge is not a boundary for a parallel line. The
-/// later log records may be skipped only when every one is an ancestor of the
-/// boundary commit; otherwise the DAG is deliberately left incomplete.
-fn boundary_closes_graph(root: &Path, records: &[Record], boundary: usize) -> bool {
-    if !records[boundary].graph_has_merge {
-        return true;
+/// Nearest older path-changing commits on every reachable parent line. A
+/// reset stops only the line that reaches it; a shared ancestor remains live
+/// when another parent can still reach it without crossing that reset.
+fn direct_predecessors(
+    records: &[Record],
+    current: usize,
+    ancestry: &mut Ancestry<'_>,
+) -> Vec<usize> {
+    let mut predecessors: Vec<usize> = Vec::new();
+    for candidate in current + 1..records.len() {
+        if !ancestry.is_ancestor(&records[candidate].commit, &records[current].commit) {
+            continue;
+        }
+        if predecessors.iter().any(|nearer| {
+            ancestry.is_ancestor(&records[candidate].commit, &records[*nearer].commit)
+        }) {
+            continue;
+        }
+        predecessors.push(candidate);
     }
-    let is_ancestor = |ancestor: &str, descendant: &str| {
-        Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(["merge-base", "--is-ancestor", ancestor, descendant])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success())
-    };
-    let boundary_commit = &records[boundary].commit;
-    records[..boundary]
-        .iter()
-        .all(|newer| is_ancestor(boundary_commit, &newer.commit))
-        && records[boundary + 1..]
-            .iter()
-            .all(|older| is_ancestor(&older.commit, boundary_commit))
+    predecessors
+}
+
+struct Ancestry<'a> {
+    root: &'a Path,
+    cache: HashMap<(String, String), bool>,
+}
+
+impl<'a> Ancestry<'a> {
+    fn new(root: &'a Path) -> Self {
+        Self {
+            root,
+            cache: HashMap::new(),
+        }
+    }
+
+    fn is_ancestor(&mut self, ancestor: &str, descendant: &str) -> bool {
+        let key = (ancestor.to_owned(), descendant.to_owned());
+        *self.cache.entry(key).or_insert_with(|| {
+            Command::new("git")
+                .arg("-C")
+                .arg(self.root)
+                .args(["merge-base", "--is-ancestor", ancestor, descendant])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success())
+        })
+    }
 }
 
 fn measured_value(candidate: &Candidate, measurement: &FileMeasurement) -> Option<u64> {
@@ -355,7 +402,6 @@ fn parse_log(output: &[u8]) -> Vec<Record> {
         }
     }
 
-    let graph_has_merge = commits.iter().any(|commit| commit.parent_count > 1);
     commits
         .into_iter()
         .filter_map(|commit| {
@@ -380,7 +426,6 @@ fn parse_log(output: &[u8]) -> Vec<Record> {
                 establishes_absence: first.establishes_absence,
                 provable: (commit.parent_count <= 1 && commit.entries.len() == 1)
                     || (commit.entries.len() == commit.parent_count && same_result),
-                graph_has_merge,
             })
         })
         .collect()
