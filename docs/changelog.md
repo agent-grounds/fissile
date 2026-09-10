@@ -32,6 +32,18 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+### Changed
+
+- The repository moved from `vjovanov/fissile` to `agent-grounds/fissile`,
+  alongside the workspace it is maintained in. Every live link now names the new
+  owner: the crate's `repository` and `homepage`, the schema `$id`s, the README's
+  install and release links, and the managed `AGENTS.md` block that `fissile
+  init` writes into an adopting repository. The crate name on crates.io is
+  unchanged, so `cargo install fissile` and every pinned version keep working,
+  and GitHub redirects the old URLs. Changelog entries keep the old name,
+  because they record where the work happened at the time. Regenerate the
+  managed block with `fissile init` to pick up the new link. (PR #70)
+
 ### Added
 
 - Debt direction and age in `audit`: `fissile audit --history <from>..<to>`

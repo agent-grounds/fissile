@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vjovanov/fissile/schema/limits.schema.json",
+  "$id": "https://github.com/agent-grounds/fissile/schema/limits.schema.json",
   "title": "fissile limits output",
   "description": "`fissile limits --format json` (FS-010-limits.4): the tree's configured rule inventory, read from the config alone. An object rather than a bare array, so the inventory can gain a sibling section without breaking a consumer.",
   "type": "object",

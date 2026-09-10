@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vjovanov/fissile/schema/measure.schema.json",
+  "$id": "https://github.com/agent-grounds/fissile/schema/measure.schema.json",
   "title": "fissile measure output",
   "description": "`fissile measure --format json` (FS-007-measure.2): one record per (file, rule), plus one per file no rule measures. Records follow the caller's file order, and a file measured in two units appears once per rule.",
   "type": "array",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vjovanov/fissile/schema/history.schema.json",
+  "$id": "https://github.com/agent-grounds/fissile/schema/history.schema.json",
   "title": "fissile audit history section",
   "description": "The optional `history` object emitted by `fissile audit --history <from>..<to>` (FS-004-check-audit.2.1). Arrays are always present and ordered deterministically; an empty requested category is `[]`.",
   "type": "object",
