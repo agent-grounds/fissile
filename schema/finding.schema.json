@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vjovanov/fissile/schema/finding.schema.json",
+  "$id": "https://github.com/agent-grounds/fissile/schema/finding.schema.json",
   "title": "fissile finding record",
   "description": "One overflow finding emitted by `fissile check` and `fissile audit` (FS-004-check-audit.1). The byte-stable fields a human and an agent both read (GOAL-003-friendly-output.1, GOAL-004-token-thrift.1).",
   "type": "object",

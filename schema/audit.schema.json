@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vjovanov/fissile/schema/audit.schema.json",
+  "$id": "https://github.com/agent-grounds/fissile/schema/audit.schema.json",
   "title": "fissile audit output",
   "description": "`fissile audit --format json` (FS-004-check-audit.2): standing findings plus optional inventory sections. `top` appears with --top, `stale` and `loose` with --stale-exceptions, `coverage` with --rule-coverage, and `history` with --history.",
   "type": "object",

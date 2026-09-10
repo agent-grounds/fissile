@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/vjovanov/fissile/schema/check.schema.json",
+  "$id": "https://github.com/agent-grounds/fissile/schema/check.schema.json",
   "title": "fissile check output",
   "description": "`fissile check --format json` (FS-004-check-audit.1, GOAL-004-token-thrift.1): a flat array of standing finding records, one per violation, sorted deterministically. An empty array means a clean check.",
   "type": "array",
