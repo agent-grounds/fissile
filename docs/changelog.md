@@ -32,6 +32,26 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+### Added
+
+- Debt direction and age in `audit`: `fissile audit --history <from>..<to>`
+  resolves an ancestral Git range and appends a final history section, in text
+  and in JSON, that says which way the exception debt moved rather than only
+  where it stands (§FS-004-check-audit.2). It reports exceptions added and
+  retired, ceilings raised and lowered, the age of every deferred entry, and the
+  age of each continuously unexceptioned soft finding, evaluating every
+  first-parent state with that revision's own config, registries, rules and
+  measurements. Identity follows §DF-005-exception-identity, so an
+  evidence-backed file or directory rename preserves an entry and its age
+  instead of reading as a retirement plus an addition, and age resets only after
+  a real absence. A malformed, non-ancestral, shallow or ambiguous history is
+  refused outright rather than reported in part. `check` and `audit` without the
+  option keep their existing execution paths and output. (PR #69)
+
+  Library callers are affected at source: `AuditOptions` gains a `history`
+  field and the audit section enum gains a variant, so exhaustive matches and
+  struct literals need updating. At 0.x this forces the minor number.
+
 ### Changed
 
 - §FS-001-config.3, §FS-004-check-audit.1.4: soft findings now demand a
