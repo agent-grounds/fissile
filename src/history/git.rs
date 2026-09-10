@@ -95,9 +95,9 @@ impl Repository<'_> {
     pub fn revisions(&self, to: &str) -> Result<Vec<Revision>, HistoryError> {
         let output = self.run(&[
             "log",
-            "--first-parent",
+            "--topo-order",
             "--reverse",
-            "--format=%H%x00%ct",
+            "--format=%H%x00%ct%x00%P",
             to,
             "--",
         ])?;
@@ -107,15 +107,27 @@ impl Repository<'_> {
         let text = String::from_utf8_lossy(&output.stdout);
         text.lines()
             .map(|line| {
-                let (sha, seconds) = line.split_once('\0').ok_or_else(|| {
+                let mut fields = line.split('\0');
+                let sha = fields.next().unwrap_or("");
+                let seconds = fields.next().ok_or_else(|| {
                     HistoryError::new(self.range, "Git returned malformed commit metadata")
                 })?;
+                let parents = fields.next().ok_or_else(|| {
+                    HistoryError::new(self.range, "Git returned malformed commit metadata")
+                })?;
+                if sha.is_empty() || fields.next().is_some() {
+                    return Err(HistoryError::new(
+                        self.range,
+                        "Git returned malformed commit metadata",
+                    ));
+                }
                 let timestamp = seconds.parse::<i64>().map_err(|_| {
                     HistoryError::new(self.range, "Git returned malformed commit metadata")
                 })?;
                 Ok(Revision {
                     sha: sha.to_owned(),
                     timestamp,
+                    parents: parents.split_whitespace().map(str::to_owned).collect(),
                 })
             })
             .collect()
@@ -202,17 +214,10 @@ impl Repository<'_> {
                 let old_path = fields[index].clone();
                 let new_path = fields[index + 1].clone();
                 index += 2;
-                let kind = if Path::new(&old_path).file_name() == Path::new(&new_path).file_name()
-                    && Path::new(&old_path).parent() != Path::new(&new_path).parent()
-                {
-                    RenameKind::Directory
-                } else {
-                    RenameKind::ExactFile
-                };
                 result.push(Rename {
                     old: old_path,
                     new: new_path,
-                    kind,
+                    kind: RenameKind::ExactFile,
                 });
             } else {
                 index += 1;

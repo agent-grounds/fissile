@@ -11,8 +11,8 @@ use std::path::Path;
 
 pub(crate) use data::History;
 use data::{
-    Address, Ceiling, CeilingChange, DeferredAge, EntryState, FindingAddress, FindingAge,
-    MovementKind, Renamed, Snapshot,
+    Address, Ceiling, CeilingChange, DeferredAge, FindingAddress, FindingAge, MovementKind,
+    Renamed, Snapshot,
 };
 use git::{Rename, RenameKind, Repository};
 
@@ -20,6 +20,7 @@ use git::{Rename, RenameKind, Repository};
 pub(crate) struct Revision {
     sha: String,
     timestamp: i64,
+    parents: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -79,14 +80,28 @@ pub(crate) fn evaluate(
     }
     let transitions = transitions(&repository, &snapshots)?;
     let mut history = classify(&snapshots, &transitions, from_index, range)?;
+    let available: BTreeSet<&str> = snapshots
+        .iter()
+        .map(|snapshot| snapshot.sha.as_str())
+        .collect();
+    let boundaries: BTreeSet<&str> = snapshots
+        .iter()
+        .filter(|snapshot| {
+            snapshot
+                .parents
+                .iter()
+                .any(|parent| !available.contains(parent.as_str()))
+        })
+        .map(|snapshot| snapshot.sha.as_str())
+        .collect();
     let reaches_boundary = history
         .deferred_ages
         .iter()
-        .any(|age| age.first_seen_commit == snapshots[0].sha)
+        .any(|age| boundaries.contains(age.first_seen_commit.as_str()))
         || history
             .soft_finding_ages
             .iter()
-            .any(|age| age.first_seen_commit == snapshots[0].sha);
+            .any(|age| boundaries.contains(age.first_seen_commit.as_str()));
     if repository.is_shallow()? && reaches_boundary {
         return Err(HistoryError::new(
             range,
@@ -131,6 +146,8 @@ fn parse_range(range: &str) -> Result<(&str, &str), HistoryError> {
 struct Transition {
     renames: Vec<Rename>,
 }
+
+type Transitions = BTreeMap<(String, String), Transition>;
 
 impl Transition {
     fn map_path(&self, path: &str) -> (String, Option<MovementKind>) {
@@ -185,72 +202,50 @@ impl Transition {
 fn transitions(
     repository: &Repository<'_>,
     snapshots: &[Snapshot],
-) -> Result<Vec<Transition>, HistoryError> {
-    let mut result = Vec::with_capacity(snapshots.len().saturating_sub(1));
-    for pair in snapshots.windows(2) {
-        let old = &pair[0];
-        let new = &pair[1];
-        let raw_renames = repository.renames(&old.sha, &new.sha)?;
-        let renames = refine_exception_renames(old, new, raw_renames);
-        refuse_ambiguous_blob_groups(repository, old, new, &renames)?;
-        result.push(Transition { renames });
+) -> Result<Transitions, HistoryError> {
+    let by_sha: BTreeMap<&str, &Snapshot> = snapshots
+        .iter()
+        .map(|snapshot| (snapshot.sha.as_str(), snapshot))
+        .collect();
+    let mut result = BTreeMap::new();
+    for new in snapshots {
+        for parent in &new.parents {
+            let Some(old) = by_sha.get(parent.as_str()) else {
+                continue;
+            };
+            let raw_renames = repository.renames(&old.sha, &new.sha)?;
+            let renames = refine_exception_renames(old, new, raw_renames);
+            refuse_ambiguous_blob_groups(repository, old, new, &renames)?;
+            result.insert((old.sha.clone(), new.sha.clone()), Transition { renames });
+        }
     }
     Ok(result)
 }
 
-fn refine_exception_renames(old: &Snapshot, new: &Snapshot, raw: Vec<Rename>) -> Vec<Rename> {
-    let mut proven = Vec::new();
-    for old_entry in &old.entries {
-        if new
-            .entries
-            .iter()
-            .any(|entry| entry.address == old_entry.address)
-        {
-            continue;
-        }
-        let candidates: Vec<&EntryState> = new
-            .entries
-            .iter()
-            .filter(|new_entry| {
-                !old.entries
-                    .iter()
-                    .any(|entry| entry.address == new_entry.address)
-                    && same_address_except_path(&old_entry.address, &new_entry.address)
-                    && old_entry.rename_hint == new_entry.rename_hint
-                    && same_blob(old, &old_entry.address.path, new, &new_entry.address.path)
-            })
-            .collect();
-        if candidates.len() != 1 {
-            continue;
-        }
-        let candidate = candidates[0];
-        let reverse_count = old
-            .entries
-            .iter()
-            .filter(|other| {
-                !new.entries
-                    .iter()
-                    .any(|entry| entry.address == other.address)
-                    && same_address_except_path(&other.address, &candidate.address)
-                    && other.rename_hint == candidate.rename_hint
-                    && same_blob(old, &other.address.path, new, &candidate.address.path)
-            })
-            .count();
-        if reverse_count == 1 {
-            proven.push(Rename {
-                old: old_entry.address.path.clone(),
-                new: candidate.address.path.clone(),
-                kind: rename_kind(&old_entry.address.path, &candidate.address.path),
-            });
+fn refine_exception_renames(old: &Snapshot, new: &Snapshot, mut raw: Vec<Rename>) -> Vec<Rename> {
+    let candidates: BTreeSet<(String, String)> = raw
+        .iter()
+        .filter_map(|rename| {
+            let old_parent = Path::new(&rename.old).parent()?.to_str()?;
+            let new_parent = Path::new(&rename.new).parent()?.to_str()?;
+            (Path::new(&rename.old).file_name() == Path::new(&rename.new).file_name()
+                && old_parent != new_parent)
+                .then(|| (old_parent.to_owned(), new_parent.to_owned()))
+        })
+        .collect();
+    for (old_prefix, new_prefix) in candidates {
+        if directory_mapping_is_proven(old, new, &raw, &old_prefix, &new_prefix) {
+            for rename in &mut raw {
+                if replacement(&rename.old, &old_prefix, &new_prefix).as_deref()
+                    == Some(rename.new.as_str())
+                {
+                    rename.kind = RenameKind::Directory;
+                }
+            }
         }
     }
-    let touched_old: BTreeSet<String> = proven.iter().map(|rename| rename.old.clone()).collect();
-    let touched_new: BTreeSet<String> = proven.iter().map(|rename| rename.new.clone()).collect();
-    proven.extend(raw.into_iter().filter(|rename| {
-        !touched_old.contains(rename.old.as_str()) && !touched_new.contains(rename.new.as_str())
-    }));
-    proven.sort_by(|left, right| left.old.cmp(&right.old).then(left.new.cmp(&right.new)));
-    proven
+    raw.sort_by(|left, right| left.old.cmp(&right.old).then(left.new.cmp(&right.new)));
+    raw
 }
 
 fn same_address_except_path(old: &Address, new: &Address) -> bool {
@@ -261,21 +256,53 @@ fn same_address_except_path(old: &Address, new: &Address) -> bool {
         && old.rules == new.rules
 }
 
-fn same_blob(old: &Snapshot, old_path: &str, new: &Snapshot, new_path: &str) -> bool {
-    old.blobs
-        .get(old_path)
-        .zip(new.blobs.get(new_path))
-        .is_some_and(|(old_blob, new_blob)| old_blob == new_blob)
+fn directory_mapping_is_proven(
+    old: &Snapshot,
+    new: &Snapshot,
+    renames: &[Rename],
+    old_prefix: &str,
+    new_prefix: &str,
+) -> bool {
+    let sources: Vec<&str> = old
+        .blobs
+        .keys()
+        .map(String::as_str)
+        .filter(|path| replacement(path, old_prefix, new_prefix).is_some())
+        .collect();
+    !sources.is_empty()
+        && sources.iter().all(|source| {
+            let expected = replacement(source, old_prefix, new_prefix).expect("descendant maps");
+            renames
+                .iter()
+                .filter(|rename| rename.old == *source && rename.new == expected)
+                .count()
+                == 1
+        })
+        && renames.iter().all(|candidate| {
+            renames
+                .iter()
+                .filter(|rename| rename.old == candidate.old || rename.new == candidate.new)
+                .count()
+                == 1
+        })
+        && old.entries.iter().any(|old_entry| {
+            replacement(&old_entry.address.path, old_prefix, new_prefix).is_some_and(|path| {
+                new.entries.iter().any(|new_entry| {
+                    new_entry.address.path == path
+                        && same_address_except_path(&old_entry.address, &new_entry.address)
+                })
+            })
+        })
+        && old.config_paths.iter().any(|path| {
+            replacement(path, old_prefix, new_prefix)
+                .is_some_and(|mapped| new.config_paths.contains(&mapped))
+        })
 }
 
-fn rename_kind(old: &str, new: &str) -> RenameKind {
-    if Path::new(old).file_name() == Path::new(new).file_name()
-        && Path::new(old).parent() != Path::new(new).parent()
-    {
-        RenameKind::Directory
-    } else {
-        RenameKind::ExactFile
-    }
+fn replacement(path: &str, old_prefix: &str, new_prefix: &str) -> Option<String> {
+    path.strip_prefix(old_prefix).and_then(|rest| {
+        (rest.is_empty() || rest.starts_with('/')).then(|| format!("{new_prefix}{rest}"))
+    })
 }
 
 fn refuse_ambiguous_blob_groups(
@@ -326,7 +353,7 @@ fn refuse_ambiguous_blob_groups(
 
 fn classify(
     snapshots: &[Snapshot],
-    transitions: &[Transition],
+    transitions: &Transitions,
     from_index: usize,
     range: &str,
 ) -> Result<History, HistoryError> {
@@ -334,7 +361,6 @@ fn classify(
     let first_seen_findings = finding_ages(snapshots, transitions);
     let from = &snapshots[from_index];
     let to = snapshots.last().expect("resolved history has one commit");
-    let range_transitions = &transitions[from_index..];
     let mut matched_to = BTreeSet::new();
     let mut added = Vec::new();
     let mut retired = Vec::new();
@@ -343,14 +369,26 @@ fn classify(
     let mut renamed = Vec::new();
 
     for old in &from.entries {
-        let (mapped, movement) = map_through(&old.address, range_transitions);
-        let Some(new) = to.entries.iter().find(|entry| entry.address == mapped) else {
+        let mappings = mappings_at_to(snapshots, transitions, from_index, &old.address);
+        let mut candidates = mappings.iter().filter_map(|(mapped, movement)| {
+            to.entries
+                .iter()
+                .find(|entry| entry.address == *mapped)
+                .map(|entry| (entry, *movement))
+        });
+        let Some((new, movement)) = candidates.next() else {
             retired.push(Ceiling {
                 address: old.address.clone(),
                 value: old.value,
             });
             continue;
         };
+        if candidates.next().is_some() {
+            return Err(HistoryError::new(
+                range,
+                format!("ambiguous rename evidence for {}", old.address.path),
+            ));
+        }
         matched_to.insert(new.address.clone());
         if old.value < new.value {
             raised.push(CeilingChange {
@@ -432,17 +470,55 @@ fn classify(
     })
 }
 
-fn map_through(address: &Address, transitions: &[Transition]) -> (Address, Option<MovementKind>) {
-    let mut mapped = address.clone();
-    let mut kind = None;
-    for transition in transitions {
-        let (next, moved) = transition.map_address(&mapped);
-        mapped = next;
-        if moved == Some(MovementKind::Directory) || kind.is_none() {
-            kind = moved.or(kind);
+fn mappings_at_to(
+    snapshots: &[Snapshot],
+    transitions: &Transitions,
+    from_index: usize,
+    address: &Address,
+) -> BTreeMap<Address, Option<MovementKind>> {
+    let from = &snapshots[from_index];
+    let mut by_commit = BTreeMap::new();
+    by_commit.insert(from.sha.as_str(), BTreeMap::from([(address.clone(), None)]));
+    for current in snapshots.iter().skip(from_index + 1) {
+        let mut current_mappings = BTreeMap::new();
+        for parent in &current.parents {
+            let Some(parent_mappings) = by_commit.get(parent.as_str()) else {
+                continue;
+            };
+            let Some(transition) = transitions.get(&(parent.clone(), current.sha.clone())) else {
+                continue;
+            };
+            for (previous, inherited_kind) in parent_mappings {
+                let (mapped, moved) = transition.map_address(previous);
+                let kind = movement(*inherited_kind, moved);
+                current_mappings
+                    .entry(mapped)
+                    .and_modify(|existing| *existing = movement(*existing, kind))
+                    .or_insert(kind);
+            }
         }
+        by_commit.insert(current.sha.as_str(), current_mappings);
     }
-    (mapped, kind)
+    by_commit
+        .remove(
+            snapshots
+                .last()
+                .expect("history has an endpoint")
+                .sha
+                .as_str(),
+        )
+        .unwrap_or_default()
+}
+
+fn movement(
+    inherited: Option<MovementKind>,
+    current: Option<MovementKind>,
+) -> Option<MovementKind> {
+    if inherited == Some(MovementKind::Directory) || current == Some(MovementKind::Directory) {
+        Some(MovementKind::Directory)
+    } else {
+        current.or(inherited)
+    }
 }
 
 #[derive(Clone)]
@@ -462,67 +538,98 @@ impl FirstSeen {
     }
 }
 
-fn entry_ages(snapshots: &[Snapshot], transitions: &[Transition]) -> BTreeMap<Address, FirstSeen> {
-    let mut ages = BTreeMap::new();
-    for entry in snapshots[0]
-        .entries
+fn entry_ages(snapshots: &[Snapshot], transitions: &Transitions) -> BTreeMap<Address, FirstSeen> {
+    let by_sha: BTreeMap<&str, &Snapshot> = snapshots
         .iter()
-        .filter(|entry| entry.kind == crate::exceptions::Kind::Deferred)
-    {
-        ages.insert(entry.address.clone(), FirstSeen::at(&snapshots[0]));
-    }
-    for (index, current) in snapshots.iter().enumerate().skip(1) {
-        let previous = &snapshots[index - 1];
-        let transition = &transitions[index - 1];
+        .map(|snapshot| (snapshot.sha.as_str(), snapshot))
+        .collect();
+    let mut by_commit = BTreeMap::new();
+    for current in snapshots {
         let mut next = BTreeMap::new();
         for entry in current
             .entries
             .iter()
             .filter(|entry| entry.kind == crate::exceptions::Kind::Deferred)
         {
-            let inherited = previous.entries.iter().find_map(|old| {
-                (old.kind == crate::exceptions::Kind::Deferred
-                    && transition.map_address(&old.address).0 == entry.address)
-                    .then(|| ages.get(&old.address).cloned())
-                    .flatten()
+            let inherited = current.parents.iter().filter_map(|parent| {
+                let previous = by_sha.get(parent.as_str())?;
+                let previous_ages: &BTreeMap<Address, FirstSeen> =
+                    by_commit.get(parent.as_str())?;
+                let transition = transitions.get(&(parent.clone(), current.sha.clone()))?;
+                previous.entries.iter().find_map(|old| {
+                    (old.kind == crate::exceptions::Kind::Deferred
+                        && transition.map_address(&old.address).0 == entry.address)
+                        .then(|| previous_ages.get(&old.address).cloned())
+                        .flatten()
+                })
             });
             next.insert(
                 entry.address.clone(),
-                inherited.unwrap_or_else(|| FirstSeen::at(current)),
+                inherited
+                    .min_by(first_seen_order)
+                    .unwrap_or_else(|| FirstSeen::at(current)),
             );
         }
-        ages = next;
+        by_commit.insert(current.sha.as_str(), next);
     }
-    ages
+    by_commit
+        .remove(
+            snapshots
+                .last()
+                .expect("history has an endpoint")
+                .sha
+                .as_str(),
+        )
+        .unwrap_or_default()
 }
 
 fn finding_ages(
     snapshots: &[Snapshot],
-    transitions: &[Transition],
+    transitions: &Transitions,
 ) -> BTreeMap<FindingAddress, FirstSeen> {
-    let mut ages = snapshots[0]
-        .findings
+    let by_sha: BTreeMap<&str, &Snapshot> = snapshots
         .iter()
-        .map(|finding| (finding.address.clone(), FirstSeen::at(&snapshots[0])))
-        .collect::<BTreeMap<_, _>>();
-    for (index, current) in snapshots.iter().enumerate().skip(1) {
-        let previous = &snapshots[index - 1];
-        let transition = &transitions[index - 1];
+        .map(|snapshot| (snapshot.sha.as_str(), snapshot))
+        .collect();
+    let mut by_commit = BTreeMap::new();
+    for current in snapshots {
         let mut next = BTreeMap::new();
         for finding in &current.findings {
-            let inherited = previous.findings.iter().find_map(|old| {
-                (transition.map_finding(&old.address) == finding.address)
-                    .then(|| ages.get(&old.address).cloned())
-                    .flatten()
+            let inherited = current.parents.iter().filter_map(|parent| {
+                let previous = by_sha.get(parent.as_str())?;
+                let previous_ages: &BTreeMap<FindingAddress, FirstSeen> =
+                    by_commit.get(parent.as_str())?;
+                let transition = transitions.get(&(parent.clone(), current.sha.clone()))?;
+                previous.findings.iter().find_map(|old| {
+                    (transition.map_finding(&old.address) == finding.address)
+                        .then(|| previous_ages.get(&old.address).cloned())
+                        .flatten()
+                })
             });
             next.insert(
                 finding.address.clone(),
-                inherited.unwrap_or_else(|| FirstSeen::at(current)),
+                inherited
+                    .min_by(first_seen_order)
+                    .unwrap_or_else(|| FirstSeen::at(current)),
             );
         }
-        ages = next;
+        by_commit.insert(current.sha.as_str(), next);
     }
-    ages
+    by_commit
+        .remove(
+            snapshots
+                .last()
+                .expect("history has an endpoint")
+                .sha
+                .as_str(),
+        )
+        .unwrap_or_default()
+}
+
+fn first_seen_order(left: &FirstSeen, right: &FirstSeen) -> std::cmp::Ordering {
+    left.timestamp
+        .cmp(&right.timestamp)
+        .then(left.sha.cmp(&right.sha))
 }
 
 fn age_days(first: i64, to: i64, range: &str) -> Result<u64, HistoryError> {

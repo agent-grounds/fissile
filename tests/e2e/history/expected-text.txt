@@ -13,3 +13,4 @@ history ${base}..${to}:
   deferred age: soft docs/file-size-agent-exceptions.toml: src/added.rs [match=exact; rules=rust; unit=lines] = 6; first ${movement} 2024-01-07T00:00:00Z; 4 days
   soft finding age: src/old_soft.rs [rule=rust; unit=lines] 5 > 3; first ${origin} 2024-01-01T00:00:00Z; 10 days
   soft finding age: src/reset.rs [rule=rust; unit=lines] 5 > 3; first ${movement} 2024-01-07T00:00:00Z; 4 days
+  soft finding age: src/retired.rs [rule=rust; unit=lines] 5 > 3; first ${movement} 2024-01-07T00:00:00Z; 4 days

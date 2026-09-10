@@ -298,16 +298,16 @@ pub fn run(options: &AuditOptions) -> Result<Run, CommandError> {
     let output = match format {
         Format::Text => {
             let color = cli::use_color(loaded.config.output.color, options.no_color, format);
-            render_text(
+            render_text(TextReport {
                 options,
-                &loaded,
-                &outcomes,
-                &contexts,
-                &inventory,
-                history.as_ref(),
+                loaded: &loaded,
+                outcomes: &outcomes,
+                contexts: &contexts,
+                inventory: &inventory,
+                history: history.as_ref(),
                 color,
-                &errors,
-            )
+                errors: &errors,
+            })
         }
         Format::Json => render_json(&outcomes, &contexts, &inventory, history.as_ref()),
     };
@@ -442,16 +442,28 @@ fn coverage(loaded: &Loaded, measured_files: &[scan::MeasuredFile]) -> Coverage 
 /// (§FS-004-check-audit.2). A section can be computed and left unprinted:
 /// `--only` governs the screen, while exit status is computed from the whole
 /// run.
-fn render_text(
-    options: &AuditOptions,
-    loaded: &Loaded,
-    outcomes: &[Outcome],
-    contexts: &[report::FindingContext],
-    inventory: &Inventory,
-    history: Option<&History>,
+struct TextReport<'a> {
+    options: &'a AuditOptions,
+    loaded: &'a Loaded,
+    outcomes: &'a [Outcome],
+    contexts: &'a [report::FindingContext],
+    inventory: &'a Inventory,
+    history: Option<&'a History>,
     color: bool,
-    errors: &[String],
-) -> String {
+    errors: &'a [String],
+}
+
+fn render_text(report: TextReport<'_>) -> String {
+    let TextReport {
+        options,
+        loaded,
+        outcomes,
+        contexts,
+        inventory,
+        history,
+        color,
+        errors,
+    } = report;
     let mut sections = Vec::new();
 
     if options.prints(Section::Findings) {
