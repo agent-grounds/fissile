@@ -431,5 +431,5 @@ from earlier version-1 configs.
 - **`exception remove`** — delete an entry that accepts nothing
   (§FS-009-exception-remove).
 
-This repo is grounded with [`grund`](https://github.com/vjovanov/grund): the
+This repo is grounded with [`grund`](https://github.com/agent-grounds/grund): the
 `§ID` markers above point at the specs and goals that justify each behavior.
