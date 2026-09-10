@@ -3,3 +3,9 @@
 # endings it preserved (§FS-008-exception-retune.3) — so git must not normalize
 # them on the way in or out.
 tests/e2e/cases/**/repo/** -text
+
+# The history suite compares the binary's stdout against these fixtures byte for
+# byte and writes the TOML ones into repositories whose lines it then counts. On
+# a Windows checkout git would hand them over with CRLF while the binary emits
+# LF, so every exact comparison fails there.
+tests/e2e/history/** -text
