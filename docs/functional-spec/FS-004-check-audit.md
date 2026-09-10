@@ -316,6 +316,7 @@ debt before and after it becomes commit-blocking (§DF-013-bounded-soft-grace).
 ```text
 fissile audit [--config <path>] [--format text|json] [--top <N>]
               [--stale-exceptions] [--rule-coverage]
+              [--history <from>..<to>]
               [--only <section>[,<section>]]
 ```
 
@@ -420,9 +421,10 @@ state. It is for adoption and maintenance, not just pass/fail.
   reader is not looking at; the flag is how the text surface reaches one section
   the way `--format json` already does (§GOAL-004-token-thrift.1).
 
-  The valid names are the seven top-level keys of `schema/audit.schema.json`,
+  The valid names are the eight top-level keys of `schema/audit.schema.json`,
   and their canonical order is the order that schema declares them in:
-  `findings`, `silenced`, `exceptions`, `top`, `stale`, `loose`, `coverage`.
+  `findings`, `silenced`, `exceptions`, `top`, `stale`, `loose`, `coverage`,
+  `history`.
   That schema is where the vocabulary comes from, so the text and the JSON
   surface cannot drift into two names for one section: adding a section to the
   schema adds it here, and this flag has no vocabulary of its own to keep in
@@ -476,9 +478,136 @@ state. It is for adoption and maintenance, not just pass/fail.
   An unknown or empty section name is a usage error naming the name that was
   not recognized and the valid set in canonical order, and exits `2` with its
   diagnostic on stderr (§5) — never a silent empty report, which reads exactly
-  like a section that had nothing in it. The seven names are public API in a
+  like a section that had nothing in it. The eight names are public API in a
   second place from here on: renaming one breaks a command line as well as a
   JSON consumer.
+
+### 2.1 Historical debt direction and age
+
+`--history <from>..<to>` adds an explicit comparison of two committed repository
+states. Both endpoints are revision expressions that must resolve to commits,
+and `from` must be an ancestor of `to`; the report records their resolved,
+full-length commit SHAs rather than the expressions the caller typed. The
+history section is last in canonical text and JSON order. `--only history`
+isolates its text, but requires `--history`; JSON contains an optional `history`
+object exactly when `--history` was requested.
+
+The library exposes the same request as `AuditOptions.history: Option<String>`
+and the same selectable/renderable section as `Section::History`, last in
+`SECTIONS`. `AuditOptions::select("history")` selects it on the same terms as
+the CLI. These are additive public Rust fields and variants in a pre-1.0 crate,
+so callers using struct literals or exhaustive matches must update.
+
+This mode belongs only to `audit`. `check` has no history option, and an `audit`
+without `--history` does no revision resolution, Git walk, historical checkout,
+or rename detection. Its stdout, stderr, and exit behavior are byte-for-byte the
+same as before this section existed. The ordinary current-state sections of a
+history run still describe the working tree under the ordinary audit contract;
+the history object describes the committed `to` snapshot. A caller that wants
+only the comparison uses `--only history`.
+
+The history object contains `from`, `to`, a `counts` object, and these arrays in
+this order: `added`, `retired`, `raised`, `lowered`, `renamed`,
+`deferred_ages`, and `soft_finding_ages`. Every array is present, including when
+empty. Counts carry the same seven names and equal the corresponding array
+lengths. An exception address is the full
+`(registry, severity, path, match, rules, unit)` tuple: `registry` is the
+repo-relative registry path at that record's endpoint, `severity` is `soft` or
+`hard`, `path` is the literal entry path expression, `match` is `exact` or
+`glob`, `rules` is the entry's declared array in its declared order (including
+`"*"`), and `unit` is `bytes`, `lines`, or `tokens`
+(§DF-005-exception-identity). A finding address has `severity = "soft"`, its
+exact file `path`, the one `rule` whose soft limit it crosses, and the rule's
+`unit`; it has no registry or matcher because it is specifically unexceptioned.
+
+- `added` and `retired` records are exception addresses plus `value`, the
+  ceiling present at `to` or `from` respectively.
+- `raised` and `lowered` records are the continuing exception's `to` address
+  plus `old_value` and `new_value`. Unit changes are not ceiling movement: unit
+  is part of identity, so they are a retirement and an addition.
+- `renamed` records carry `old` and `new` exception addresses plus `kind`,
+  either `exact-file` or `directory`. A rename can accompany a ceiling movement;
+  in that case it appears in both arrays. It never also appears in `added` or
+  `retired`.
+- `deferred_ages` records carry the current deferred exception address and
+  ceiling plus the first commit and date of its current continuous state and
+  its age in whole days. Structural entries have no age record. A soft entry
+  with `shadows = "hard"` takes the hard entry's effective kind, as it does in
+  current-state evaluation (§FS-003-exceptions.2.3).
+- `soft_finding_ages` records carry a current unexceptioned soft finding address,
+  `actual`, `limit`, and the same first-seen fields. A hard overflow also has a
+  soft age when it crosses a distinct soft limit and no soft or structural-hard
+  entry silences that soft finding (§FS-003-exceptions.5).
+
+Exception movement arrays sort by the current address where one exists, the
+old address for retirements, then by old and new numeric values. Addresses sort
+lexicographically by severity, registry, path, match, unit, and the rules array.
+Renames sort by their new address and then old address. Age arrays sort by age
+descending, then first-seen commit ascending, then their address. Text renders
+the same array order, using one line per record and no narrative:
+
+```text
+history <full-from-sha>..<full-to-sha>:
+  exceptions: +1 -1; ceilings: 1 raised, 1 lowered; renames: 2
+  added: soft docs/file-size-agent-exceptions.toml: src/new.rs [match=exact; rules=rust; unit=lines] = 600
+  retired: soft docs/file-size-agent-exceptions.toml: src/old.rs [match=exact; rules=rust; unit=lines] = 500
+  raised: soft docs/file-size-agent-exceptions.toml: src/growing.rs [match=exact; rules=rust; unit=lines] 500 -> 700
+  lowered: hard docs/file-size-human-exceptions.toml: src/shrinking.rs [match=exact; rules=rust; unit=lines] 900 -> 700
+  renamed: exact-file soft docs/file-size-agent-exceptions.toml: src/before.rs -> src/after.rs [match=exact; rules=rust; unit=lines]
+  deferred age: soft docs/file-size-agent-exceptions.toml: src/new.rs [match=exact; rules=rust; unit=lines] = 600; first <full-sha> 2026-09-01T12:00:00Z; 9 days
+  soft finding age: src/standing.rs [rule=rust; unit=lines] 420 > 350; first <full-sha> 2026-08-01T12:00:00Z; 40 days
+```
+
+Only non-empty arrays contribute detail lines in text; the summary line always
+reports all movement counts, including zeros. JSON uses the field names and
+shapes in `schema/history.schema.json`, including `first_seen_commit`,
+`first_seen_date`, and `age_days`. Numbers never absorb their unit into a
+string. The schema's arrays, required fields, and `additionalProperties: false`
+at its envelopes plus closed record shapes are the stable machine contract.
+
+Age begins at the first commit of the current *continuous* state. For a deferred
+entry, continuity means an entry at the same identity address, after applying
+the rename rules below, remains deferred at every commit through `to`; changes
+to rationale, owner, issue, title, `until`, or ceiling do not reset it. For a
+soft finding, the same file and rule must continuously
+cross that revision's soft limit without an exception that silences it. A state
+that is absent for even one commit and later recurs starts again at the later
+commit. `first_seen_date` is that commit's committer timestamp normalized to
+RFC 3339 UTC. `age_days` is the non-negative elapsed seconds from it to the `to`
+commit's committer timestamp divided by 86,400 and rounded down; wall-clock time
+is never read. A first-seen timestamp later than `to` is unevaluable rather than
+silently clamped.
+
+Every historical snapshot uses the committed config, registry documents, file
+content, rule matching and exclusions, line policy, token command, and unit
+semantics at that revision. Today's checkout is not projected backward. A
+config or policy change can therefore begin or end a finding, and an exception
+address using a different unit or rules is a different entry even if its path
+did not move.
+
+Rename continuity is evidence-based. A Git-confirmed rename of one exact file
+maps its exact-path exception and finding identities to the destination. An
+unambiguous directory or test-home rename maps descendants only when every
+tracked source descendant has one Git-confirmed destination under a single new
+prefix, no source or destination has a competing mapping, and the config and
+registry edits at that commit make the corresponding prefix substitution.
+Those mappings preserve identity and age and produce `renamed` records instead
+of added-plus-retired records. Globs preserve continuity only through that
+unambiguous prefix substitution; similarity of their expanded file sets is not
+rename evidence. A copy, a delete-plus-add without Git rename evidence, or any
+ambiguous mapping is never guessed.
+
+History is all-or-nothing. A malformed range, an endpoint that does not resolve
+to one commit, non-ancestry, invocation outside a Git work tree, a shallow or
+truncated walk that cannot prove the true first appearance, ambiguous rename
+evidence, a historical config/registry/schema error, an unavailable external
+token evaluation, a negative timestamp interval, or any other unevaluable
+snapshot exits `2`. The stderr diagnostic starts `fissile audit: history
+<requested-range>:` and names the offending revision when one is known plus a
+stable cause. No history text or JSON object is emitted, and no partial history
+result is substituted. Usage errors still include audit usage; run-time history
+failures do not. Revision expressions are passed to Git as data, never parsed as
+options.
 
 `audit` exits non-zero for hard overflows and schema errors. Soft-only findings
 exit `0`. Stale exceptions follow `[exceptions].stale`: `warn`, `error`, or

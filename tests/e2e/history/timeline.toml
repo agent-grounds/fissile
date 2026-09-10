@@ -1,0 +1,88 @@
+[[commits]]
+name = "origin"
+date = "2024-01-01T00:00:00Z"
+
+[[commits.files]]
+path = ".agent-grounds/fissile.toml"
+source = "repo/origin-fissile.toml"
+
+[[commits.files]]
+path = "docs/file-size-agent-exceptions.toml"
+source = "repo/origin-exceptions.toml"
+
+[[commits.files]]
+path = "src/lower.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "src/old_soft.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "src/raise.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "src/rename.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "src/reset.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "src/retired.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "tests/old_home/case.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits]]
+name = "base"
+date = "2024-01-03T00:00:00Z"
+
+[[commits.files]]
+path = "README.md"
+content = "comparison baseline\n"
+
+[[commits]]
+name = "absent"
+date = "2024-01-05T00:00:00Z"
+removes = ["src/reset.rs"]
+
+[[commits]]
+name = "movement"
+date = "2024-01-07T00:00:00Z"
+
+[[commits.moves]]
+from = "src/rename.rs"
+to = "src/moved.rs"
+
+[[commits.moves]]
+from = "tests/old_home/case.rs"
+to = "tests/new_home/case.rs"
+
+[[commits.files]]
+path = "src/reset.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = "src/added.rs"
+content = "one\ntwo\nthree\nfour\nfive\n"
+
+[[commits.files]]
+path = ".agent-grounds/fissile.toml"
+source = "repo/movement-fissile.toml"
+
+[[commits.files]]
+path = "docs/file-size-agent-exceptions.toml"
+source = "repo/movement-exceptions.toml"
+
+[[commits]]
+name = "to"
+date = "2024-01-11T00:00:00Z"
+
+[[commits.files]]
+path = "README.md"
+content = "comparison endpoint\n"

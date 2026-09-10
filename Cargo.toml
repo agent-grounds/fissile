@@ -72,6 +72,10 @@ path = "tests/integration/config_discovery.rs"
 name = "public_api_compat"
 path = "tests/integration/public_api_compat.rs"
 
+[[test]]
+name = "history_e2e"
+path = "tests/e2e/history/main.rs"
+
 [dependencies]
 # Config is data, not code (§GOAL-002-tiny-footprint): serde + toml parse the
 # versioned TOML document. The glob engine and CLI argument parsing are

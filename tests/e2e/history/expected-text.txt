@@ -1,0 +1,15 @@
+history ${base}..${to}:
+  exceptions: +1 -1; ceilings: 1 raised, 1 lowered; renames: 2
+  added: soft docs/file-size-agent-exceptions.toml: src/added.rs [match=exact; rules=rust; unit=lines] = 6
+  retired: soft docs/file-size-agent-exceptions.toml: src/retired.rs [match=exact; rules=rust; unit=lines] = 6
+  raised: soft docs/file-size-agent-exceptions.toml: src/raise.rs [match=exact; rules=rust; unit=lines] 6 -> 9
+  lowered: soft docs/file-size-agent-exceptions.toml: src/lower.rs [match=exact; rules=rust; unit=lines] 10 -> 7
+  renamed: exact-file soft docs/file-size-agent-exceptions.toml: src/rename.rs -> src/moved.rs [match=exact; rules=rust; unit=lines]
+  renamed: directory soft docs/file-size-agent-exceptions.toml: tests/old_home/case.rs -> tests/new_home/case.rs [match=exact; rules=rust; unit=lines]
+  deferred age: soft docs/file-size-agent-exceptions.toml: src/lower.rs [match=exact; rules=rust; unit=lines] = 7; first ${origin} 2024-01-01T00:00:00Z; 10 days
+  deferred age: soft docs/file-size-agent-exceptions.toml: src/moved.rs [match=exact; rules=rust; unit=lines] = 6; first ${origin} 2024-01-01T00:00:00Z; 10 days
+  deferred age: soft docs/file-size-agent-exceptions.toml: src/raise.rs [match=exact; rules=rust; unit=lines] = 9; first ${origin} 2024-01-01T00:00:00Z; 10 days
+  deferred age: soft docs/file-size-agent-exceptions.toml: tests/new_home/case.rs [match=exact; rules=rust; unit=lines] = 6; first ${origin} 2024-01-01T00:00:00Z; 10 days
+  deferred age: soft docs/file-size-agent-exceptions.toml: src/added.rs [match=exact; rules=rust; unit=lines] = 6; first ${movement} 2024-01-07T00:00:00Z; 4 days
+  soft finding age: src/old_soft.rs [rule=rust; unit=lines] 5 > 3; first ${origin} 2024-01-01T00:00:00Z; 10 days
+  soft finding age: src/reset.rs [rule=rust; unit=lines] 5 > 3; first ${movement} 2024-01-07T00:00:00Z; 4 days

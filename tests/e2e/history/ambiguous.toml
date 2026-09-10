@@ -1,0 +1,80 @@
+[[commits]]
+name = "base"
+date = "2024-02-01T00:00:00Z"
+
+[[commits.files]]
+path = ".agent-grounds/fissile.toml"
+content = '''
+fissile_config_version = 1
+[scan]
+include = ["src"]
+exclude = []
+respect_gitignore = false
+[exceptions]
+soft_registry = "docs/file-size-agent-exceptions.toml"
+hard_registry = "docs/file-size-human-exceptions.toml"
+stale = "ignore"
+[[messages]]
+id = "m"
+text = "Split it."
+[[rules]]
+id = "rust"
+include = ["src/**/*.rs"]
+unit = "lines"
+soft = 1
+hard = 20
+message = "m"
+'''
+
+[[commits.files]]
+path = "docs/file-size-agent-exceptions.toml"
+content = '''
+fissile_exceptions_version = 2
+[[exceptions]]
+path = "src/one.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 3, unit = "lines" }
+until = "one is split"
+reason = "One has no extraction boundary yet."
+[[exceptions]]
+path = "src/two.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 3, unit = "lines" }
+until = "two is split"
+reason = "Two has no extraction boundary yet."
+'''
+
+[[commits.files]]
+path = "src/one.rs"
+content = "same\ncontent\n"
+
+[[commits.files]]
+path = "src/two.rs"
+content = "same\ncontent\n"
+
+[[commits]]
+name = "to"
+date = "2024-02-03T00:00:00Z"
+removes = ["src/one.rs", "src/two.rs"]
+
+[[commits.files]]
+path = "src/moved.rs"
+content = "same\ncontent\n"
+
+[[commits.files]]
+path = "docs/file-size-agent-exceptions.toml"
+content = '''
+fissile_exceptions_version = 2
+[[exceptions]]
+path = "src/moved.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 3, unit = "lines" }
+until = "the file is split"
+reason = "The file has no extraction boundary yet."
+'''

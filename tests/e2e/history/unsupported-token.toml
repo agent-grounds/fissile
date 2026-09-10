@@ -1,0 +1,38 @@
+[[commits]]
+name = "base"
+date = "2024-03-01T00:00:00Z"
+
+[[commits.files]]
+path = ".agent-grounds/fissile.toml"
+content = '''
+fissile_config_version = 1
+[scan]
+include = ["src"]
+exclude = []
+respect_gitignore = false
+[tokens]
+enabled = true
+command = ["./missing-token-counter", "{path}"]
+[[messages]]
+id = "m"
+text = "Split it."
+[[rules]]
+id = "tokens"
+include = ["src/**/*.txt"]
+unit = "tokens"
+soft = 1
+hard = 20
+message = "m"
+'''
+
+[[commits.files]]
+path = "src/words.txt"
+content = "one two three\n"
+
+[[commits]]
+name = "to"
+date = "2024-03-03T00:00:00Z"
+
+[[commits.files]]
+path = "README.md"
+content = "token endpoint\n"

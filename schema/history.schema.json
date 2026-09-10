@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vjovanov/fissile/schema/history.schema.json",
+  "title": "fissile audit history section",
+  "description": "The optional `history` object emitted by `fissile audit --history <from>..<to>` (FS-004-check-audit.2.1). Arrays are always present and ordered deterministically; an empty requested category is `[]`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "from",
+    "to",
+    "counts",
+    "added",
+    "retired",
+    "raised",
+    "lowered",
+    "renamed",
+    "deferred_ages",
+    "soft_finding_ages"
+  ],
+  "properties": {
+    "from": {
+      "$ref": "#/$defs/commit"
+    },
+    "to": {
+      "$ref": "#/$defs/commit"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "added",
+        "retired",
+        "raised",
+        "lowered",
+        "renamed",
+        "deferred_ages",
+        "soft_finding_ages"
+      ],
+      "properties": {
+        "added": { "$ref": "#/$defs/count" },
+        "retired": { "$ref": "#/$defs/count" },
+        "raised": { "$ref": "#/$defs/count" },
+        "lowered": { "$ref": "#/$defs/count" },
+        "renamed": { "$ref": "#/$defs/count" },
+        "deferred_ages": { "$ref": "#/$defs/count" },
+        "soft_finding_ages": { "$ref": "#/$defs/count" }
+      }
+    },
+    "added": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ceiling" }
+    },
+    "retired": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ceiling" }
+    },
+    "raised": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ceiling_change" }
+    },
+    "lowered": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ceiling_change" }
+    },
+    "renamed": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rename" }
+    },
+    "deferred_ages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deferred_age" }
+    },
+    "soft_finding_ages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding_age" }
+    }
+  },
+  "$defs": {
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "A fully resolved commit SHA."
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "unit": {
+      "type": "string",
+      "enum": ["bytes", "lines", "tokens"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["soft", "hard"]
+    },
+    "exception_address": {
+      "type": "object",
+      "required": ["registry", "severity", "path", "match", "rules", "unit"],
+      "properties": {
+        "registry": {
+          "type": "string",
+          "description": "Repo-relative configured registry path at this record's endpoint."
+        },
+        "severity": { "$ref": "#/$defs/severity" },
+        "path": {
+          "type": "string",
+          "description": "The entry's literal path expression."
+        },
+        "match": {
+          "type": "string",
+          "enum": ["exact", "glob"]
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Rule ids in the entry's declared order, including `*` when declared."
+        },
+        "unit": { "$ref": "#/$defs/unit" }
+      }
+    },
+    "strict_exception_address": {
+      "allOf": [
+        { "$ref": "#/$defs/exception_address" }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ceiling": {
+      "allOf": [
+        { "$ref": "#/$defs/exception_address" },
+        {
+          "type": "object",
+          "required": ["value"],
+          "properties": {
+            "value": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "ceiling_change": {
+      "allOf": [
+        { "$ref": "#/$defs/exception_address" },
+        {
+          "type": "object",
+          "required": ["old_value", "new_value"],
+          "properties": {
+            "old_value": { "type": "integer", "minimum": 0 },
+            "new_value": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "rename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "old", "new"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["exact-file", "directory"]
+        },
+        "old": { "$ref": "#/$defs/strict_exception_address" },
+        "new": { "$ref": "#/$defs/strict_exception_address" }
+      }
+    },
+    "age": {
+      "type": "object",
+      "required": ["first_seen_commit", "first_seen_date", "age_days"],
+      "properties": {
+        "first_seen_commit": { "$ref": "#/$defs/commit" },
+        "first_seen_date": { "type": "string", "format": "date-time" },
+        "age_days": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "deferred_age": {
+      "allOf": [
+        { "$ref": "#/$defs/exception_address" },
+        { "$ref": "#/$defs/age" },
+        {
+          "type": "object",
+          "required": ["value"],
+          "properties": {
+            "value": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "finding_age": {
+      "allOf": [
+        { "$ref": "#/$defs/age" },
+        {
+          "type": "object",
+          "required": ["severity", "path", "rule", "unit", "actual", "limit"],
+          "properties": {
+            "severity": {
+              "const": "soft"
+            },
+            "path": { "type": "string" },
+            "rule": { "type": "string" },
+            "unit": { "$ref": "#/$defs/unit" },
+            "actual": { "type": "integer", "minimum": 0 },
+            "limit": { "type": "integer", "minimum": 0 }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

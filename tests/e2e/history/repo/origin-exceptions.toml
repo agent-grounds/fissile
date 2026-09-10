@@ -1,0 +1,46 @@
+fissile_exceptions_version = 2
+
+[[exceptions]]
+path = "src/lower.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 10, unit = "lines" }
+until = "the lower module is split"
+reason = "The lower module has no extraction boundary yet."
+
+[[exceptions]]
+path = "tests/old_home/case.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 6, unit = "lines" }
+until = "the test helper is extracted"
+reason = "The test helper has no extraction boundary yet."
+
+[[exceptions]]
+path = "src/retired.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 6, unit = "lines" }
+until = "the retired module is split"
+reason = "The retired module has no extraction boundary yet."
+
+[[exceptions]]
+path = "src/rename.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 6, unit = "lines" }
+until = "the renamed module is split"
+reason = "The renamed module has no extraction boundary yet."
+
+[[exceptions]]
+path = "src/raise.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 6, unit = "lines" }
+until = "the raised module is split"
+reason = "The raised module has no extraction boundary yet."
