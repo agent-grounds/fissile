@@ -7,7 +7,7 @@ permission profile mounts `.agents/` read-only inside a checkout, so an agent
 working in the repository cannot edit anything under it.
 
 That protection is right for instructions and wrong for tool config. It was hit
-concretely on vjovanov/rhei#157: three consecutive supervised fix rounds failed
+concretely on agent-grounds/rhei#157: three consecutive supervised fix rounds failed
 to repair a tracked file under `.agents/`, each round reporting the same
 finding, because the sandbox refused the write without saying so. The run cost a
 full pass and shipped nothing. Nothing in the tool was broken — the directory

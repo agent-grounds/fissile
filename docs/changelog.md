@@ -34,6 +34,14 @@ and at 0.x semver puts the minor number in charge of it.
 
 ### Changed
 
+- The links to the sibling tools now name `agent-grounds`, which `grund` and
+  `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md`
+  pointers to `grund`, and the config-home decision's reference to `rhei`'s
+  matching issue. Changelog entries keep the old name, because they record where
+  the work happened at the time. (PR #71)
+
+### Changed
+
 - The repository moved from `vjovanov/fissile` to `agent-grounds/fissile`,
   alongside the workspace it is maintained in. Every live link now names the new
   owner: the crate's `repository` and `homepage`, the schema `$id`s, the README's
