@@ -10,6 +10,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::Deserialize;
 
+mod regressions;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Timeline {

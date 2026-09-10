@@ -63,9 +63,6 @@ pub(crate) struct EntryState {
     pub address: Address,
     pub value: u64,
     pub kind: Kind,
-    /// Non-identity evidence used only to disambiguate several byte-identical
-    /// rename candidates. Changing it never resets continuity.
-    pub rename_hint: String,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -85,11 +82,13 @@ pub(crate) struct FindingState {
 #[derive(Clone, Debug)]
 pub(crate) struct Snapshot {
     pub sha: String,
+    pub parents: Vec<String>,
     pub timestamp: i64,
     pub date: String,
     pub entries: Vec<EntryState>,
     pub findings: Vec<FindingState>,
     pub blobs: std::collections::BTreeMap<String, String>,
+    pub config_paths: std::collections::BTreeSet<String>,
 }
 
 #[derive(Clone, Debug)]

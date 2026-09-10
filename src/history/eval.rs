@@ -76,17 +76,33 @@ pub(crate) fn snapshot(
             address: Address::from_exception(entry),
             value: entry.max_value,
             kind: entry.kind,
-            rename_hint: format!("{}\0{}", entry.until, entry.reason),
         })
         .collect();
     entries.sort_by(|left, right| left.address.cmp(&right.address));
+    let config_paths = loaded
+        .config
+        .scan
+        .include
+        .iter()
+        .chain(&loaded.config.scan.exclude)
+        .chain(
+            loaded
+                .config
+                .rules
+                .iter()
+                .flat_map(|rule| rule.include.iter().chain(&rule.exclude)),
+        )
+        .cloned()
+        .collect();
     Ok(Snapshot {
         sha: revision.sha.clone(),
+        parents: revision.parents.clone(),
         timestamp: revision.timestamp,
         date: super::utc_date(revision.timestamp),
         entries,
         findings,
         blobs: materialized.blobs.clone(),
+        config_paths,
     })
 }
 
