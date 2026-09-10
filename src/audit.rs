@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use crate::cli::{self, CommandError, Format, Loaded};
 use crate::exceptions::{EntrySite, Exception, KindCounts, KindPathCounts};
+use crate::history::History;
 use crate::json::Json;
 use crate::loose::{self, Loose};
 use crate::report::{self, EvalError, Outcome};
@@ -22,6 +23,9 @@ pub struct AuditOptions {
     pub top: Option<usize>,
     pub stale_exceptions: bool,
     pub rule_coverage: bool,
+    /// An ancestral Git range whose committed debt history is appended to the
+    /// audit (§FS-004-check-audit.2.1).
+    pub history: Option<String>,
     /// The sections `--only` named, or `None` for the whole report
     /// (§FS-004-check-audit.2). A set: the order they were named in and a name
     /// repeated do not reach the output, which renders in canonical order.
@@ -80,12 +84,13 @@ pub enum Section {
     Stale,
     Loose,
     Coverage,
+    History,
 }
 
 /// Every section in the canonical order `schema/audit.schema.json` declares
 /// them, which is the order a report renders in whatever order `--only` named
 /// them (§FS-004-check-audit.2).
-pub const SECTIONS: [Section; 7] = [
+pub const SECTIONS: [Section; 8] = [
     Section::Findings,
     Section::Silenced,
     Section::Exceptions,
@@ -93,6 +98,7 @@ pub const SECTIONS: [Section; 7] = [
     Section::Stale,
     Section::Loose,
     Section::Coverage,
+    Section::History,
 ];
 
 impl Section {
@@ -107,6 +113,7 @@ impl Section {
             Section::Stale => "stale",
             Section::Loose => "loose",
             Section::Coverage => "coverage",
+            Section::History => "history",
         }
     }
 
@@ -182,6 +189,11 @@ pub fn run(options: &AuditOptions) -> Result<Run, CommandError> {
         return Err(CommandError::Usage(
             "--only selects sections of the text report and is not valid with --format json"
                 .to_owned(),
+        ));
+    }
+    if options.selects(Section::History) && options.history.is_none() {
+        return Err(CommandError::Usage(
+            "--only history requires --history <from>..<to>".to_owned(),
         ));
     }
     let files = scan::walk_scope(&loaded.root, &loaded.config.scan)?;
@@ -274,14 +286,30 @@ pub fn run(options: &AuditOptions) -> Result<Run, CommandError> {
         kind_paths: loaded.registries.kind_path_counts(),
     };
 
+    // History is deliberately computed only behind its explicit option. The
+    // ordinary audit path above remains the current working-tree inventory
+    // (§FS-004-check-audit.2.1).
+    let history = options
+        .history
+        .as_deref()
+        .map(|range| crate::history::evaluate(&loaded.root, range, options.config_path.as_deref()))
+        .transpose()?;
+
     let output = match format {
         Format::Text => {
             let color = cli::use_color(loaded.config.output.color, options.no_color, format);
             render_text(
-                options, &loaded, &outcomes, &contexts, &inventory, color, &errors,
+                options,
+                &loaded,
+                &outcomes,
+                &contexts,
+                &inventory,
+                history.as_ref(),
+                color,
+                &errors,
             )
         }
-        Format::Json => render_json(&outcomes, &contexts, &inventory),
+        Format::Json => render_json(&outcomes, &contexts, &inventory, history.as_ref()),
     };
     Ok(Run {
         output,
@@ -420,6 +448,7 @@ fn render_text(
     outcomes: &[Outcome],
     contexts: &[report::FindingContext],
     inventory: &Inventory,
+    history: Option<&History>,
     color: bool,
     errors: &[String],
 ) -> String {
@@ -508,6 +537,12 @@ fn render_text(
         sections.push(render_coverage_text(coverage));
     }
 
+    if options.prints(Section::History)
+        && let Some(history) = history
+    {
+        sections.push(history.render_text());
+    }
+
     sections.join("\n\n")
 }
 
@@ -545,6 +580,7 @@ fn render_json(
     outcomes: &[Outcome],
     contexts: &[report::FindingContext],
     inventory: &Inventory,
+    history: Option<&History>,
 ) -> String {
     let findings: Vec<Json> = outcomes
         .iter()
@@ -628,6 +664,10 @@ fn render_json(
                 ("unused_messages", str_array(&coverage.unused_messages)),
             ]),
         ));
+    }
+
+    if let Some(history) = history {
+        fields.push(("history", history.json()));
     }
 
     Json::Object(fields).render()
