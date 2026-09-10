@@ -9,6 +9,7 @@ use crate::config::Bump;
 use crate::entry;
 use crate::exceptions::{Exception, ExceptionError, Kind, Registries, Verdict};
 use crate::json::Json;
+use crate::staged_history::SoftEdit;
 use crate::{
     Checker, FileMeasurement, FissileError, Overflow, RuleHit, Severity, Unit, render_overflow,
 };
@@ -263,6 +264,17 @@ pub(crate) fn finding_blocks_with_context(
     color: bool,
     contexts: &[FindingContext],
 ) -> Vec<String> {
+    finding_blocks_with_staged_context(outcomes, color, contexts, &[])
+}
+
+/// Render command findings with staged edit provenance where the commit-side
+/// history proof supplied it (§FS-004-check-audit.1.4).
+pub(crate) fn finding_blocks_with_staged_context(
+    outcomes: &[Outcome],
+    color: bool,
+    contexts: &[FindingContext],
+    soft_edits: &[SoftEdit],
+) -> Vec<String> {
     let mut groups: Vec<Group<'_>> = Vec::new();
 
     for overflow in outcomes
@@ -273,6 +285,7 @@ pub(crate) fn finding_blocks_with_context(
         let finding = Finding {
             overflow,
             context: context_for(contexts, overflow),
+            soft_edit: soft_edit_for(soft_edits, overflow),
         };
         match groups.iter_mut().find(|group| group.accepts(&finding)) {
             Some(group) => group.overflows.push(finding),
@@ -319,6 +332,13 @@ pub const MEASURE_HINT: &str =
 pub const COMMIT_GATE: &str = "\
 commit blocked by fissile. Split the file, or ask a human for a reviewed hard
 exception. Bypassing with --no-verify leaves the overflow for review or CI.";
+
+/// The commit epilogue for edit-promoted soft debt: the exception remains in
+/// the soft registry because promotion changes blocking, not severity.
+pub const COMMIT_GATE_PROMOTED: &str = "\
+commit blocked by fissile. Split the file now, or record the soft-limit debt
+now with `fissile exception add <path> --severity soft --rule <rule> --kind
+<kind>`. Bypassing with --no-verify leaves the overflow for review or CI.";
 
 /// The same epilogue when a dead registry entry is the only thing blocking the
 /// commit: there is no file to split, and the fix is in the registry the block
@@ -394,6 +414,7 @@ struct Group<'a> {
 struct Finding<'a> {
     overflow: &'a Overflow,
     context: Option<&'a FindingContext>,
+    soft_edit: Option<&'a SoftEdit>,
 }
 
 impl<'a> Group<'a> {
@@ -404,6 +425,8 @@ impl<'a> Group<'a> {
         self.head.overflow.severity == finding.overflow.severity
             && self.head.overflow.rule_id == finding.overflow.rule_id
             && self.head.overflow.message.text == finding.overflow.message.text
+            && self.head.soft_edit.is_some_and(SoftEdit::promoted)
+                == finding.soft_edit.is_some_and(SoftEdit::promoted)
     }
 
     /// Hard before soft, then by rule ID, then by message ID.
@@ -425,9 +448,13 @@ impl<'a> Group<'a> {
         } else {
             format!("{} files", self.overflows.len())
         };
+        let severity = if self.head.soft_edit.is_some_and(SoftEdit::promoted) {
+            "soft (promoted)"
+        } else {
+            self.head.overflow.severity.as_str()
+        };
         format!(
-            "{}: {files} over the {}-{} budget [rule: {}, message: {}]",
-            self.head.overflow.severity,
+            "{severity}: {files} over the {}-{} budget [rule: {}, message: {}]",
             self.head.overflow.limit,
             self.head.overflow.unit.singular(),
             self.head.overflow.rule_id,
@@ -459,6 +486,7 @@ impl<'a> Group<'a> {
             let clauses: Vec<String> = basis
                 .map(|_| format!("budget {}", overflow.limit))
                 .into_iter()
+                .chain(finding.soft_edit.map(soft_edit_clause))
                 .chain(
                     finding
                         .context
@@ -532,6 +560,15 @@ pub fn overflow_json(outcome: &Outcome) -> Json {
 /// (§FS-004-check-audit.1). A silenced record reports the accepting entry's own
 /// ceiling as `exception_max` instead (§FS-003-exceptions.5).
 pub(crate) fn overflow_json_with_context(outcome: &Outcome, contexts: &[FindingContext]) -> Json {
+    overflow_json_with_staged_context(outcome, contexts, &[])
+}
+
+/// JSON finding plus staged edit provenance when this is the commit-time view.
+pub(crate) fn overflow_json_with_staged_context(
+    outcome: &Outcome,
+    contexts: &[FindingContext],
+    soft_edits: &[SoftEdit],
+) -> Json {
     let overflow = outcome.overflow();
     let mut fields = vec![
         ("path", Json::str(overflow.path.to_string_lossy())),
@@ -543,6 +580,17 @@ pub(crate) fn overflow_json_with_context(outcome: &Outcome, contexts: &[FindingC
         ("message_id", Json::str(overflow.message.id.clone())),
         ("message", Json::str(overflow.message.text.clone())),
     ];
+    if let Some(edit) = soft_edit_for(soft_edits, overflow) {
+        fields.push(("soft_edit_count", Json::UInt(edit.count)));
+        fields.push(("soft_edit_limit", Json::UInt(edit.limit)));
+        fields.push((
+            "soft_edit_history_complete",
+            Json::Bool(edit.history_complete),
+        ));
+        if edit.promoted() {
+            fields.push(("promotion", Json::str("soft_edit_limit")));
+        }
+    }
     match outcome {
         Outcome::Reported(_) => {
             if let Some(ceiling) =
@@ -556,6 +604,35 @@ pub(crate) fn overflow_json_with_context(outcome: &Outcome, contexts: &[FindingC
         }
     }
     Json::Object(fields)
+}
+
+fn soft_edit_for<'a>(soft_edits: &'a [SoftEdit], overflow: &Overflow) -> Option<&'a SoftEdit> {
+    soft_edits.iter().find(|edit| {
+        overflow.severity == Severity::Soft
+            && edit.path == overflow.path
+            && edit.rule_id == overflow.rule_id
+            && edit.unit == overflow.unit
+    })
+}
+
+fn soft_edit_clause(edit: &SoftEdit) -> String {
+    if edit.promoted() {
+        format!(
+            "soft edits {}/{}; promoted to blocking",
+            edit.count, edit.limit
+        )
+    } else if edit.history_complete {
+        format!("soft edits {}/{}", edit.count, edit.limit)
+    } else {
+        format!(
+            "soft edits {}/{}; history incomplete; promotion disabled",
+            edit.count, edit.limit
+        )
+    }
+}
+
+pub(crate) fn has_soft_edit_promotion(soft_edits: &[SoftEdit]) -> bool {
+    soft_edits.iter().any(SoftEdit::promoted)
 }
 
 #[cfg(test)]

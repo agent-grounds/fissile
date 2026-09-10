@@ -9,6 +9,7 @@ use crate::exceptions::{Exception, MatchKind};
 use crate::json::Json;
 use crate::report::{self, Outcome};
 use crate::scan;
+use crate::staged_history::{self, Candidate, SoftEdit};
 
 /// Inputs to a `check` run.
 #[derive(Clone, Debug)]
@@ -40,6 +41,8 @@ enum Blocked {
     No,
     /// A standing hard overflow: the remedy is a split.
     Overflow,
+    /// A history-proven soft edit reached its configured grace limit.
+    PromotedSoft,
     /// An exception entry that has outlived its file, under `stale = "error"`:
     /// the remedy is the registry (§FS-004-check-audit.1.3).
     DeadEntry,
@@ -57,6 +60,7 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
     let (measured_files, errors) = cli::measure_each_with_context(&loaded, options.staged, &files);
     let mut contexts = Vec::new();
     let mut outcomes = Vec::new();
+    let mut history_candidates = Vec::new();
     for measured_file in &measured_files {
         let measurement = &measured_file.measurement;
         let hits = loaded
@@ -69,12 +73,44 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
             measured_file.utf8,
             &loaded.config.exceptions.bump,
         ));
-        outcomes.extend(report::evaluate_hits(
-            &loaded.registries,
-            measurement,
-            &hits,
-        )?);
+        let file_outcomes = report::evaluate_hits(&loaded.registries, measurement, &hits)?;
+        if options.staged {
+            for overflow in file_outcomes
+                .iter()
+                .filter(|outcome| outcome.is_reported())
+                .map(Outcome::overflow)
+                .filter(|overflow| overflow.severity == crate::Severity::Soft)
+            {
+                let hit = hits
+                    .iter()
+                    .find(|hit| {
+                        hit.rule.id == overflow.rule_id && hit.rule.budget.unit == overflow.unit
+                    })
+                    .expect("reported overflow came from an effective rule");
+                let spec = loaded
+                    .config
+                    .rules
+                    .iter()
+                    .find(|spec| spec.id == overflow.rule_id)
+                    .expect("compiled rule came from config");
+                history_candidates.push(Candidate {
+                    path: overflow.path.clone(),
+                    rule_id: overflow.rule_id.clone(),
+                    unit: overflow.unit,
+                    soft_limit: overflow.limit,
+                    edit_limit: spec.effective_soft_edit_limit(),
+                    count_blank_lines: hit.rule.count_blank_lines,
+                    count_comment_lines: hit.rule.count_comment_lines,
+                });
+            }
+        }
+        outcomes.extend(file_outcomes);
     }
+    let soft_edits = if options.staged {
+        staged_history::derive(&loaded.root, &loaded.config.tokens, &history_candidates)
+    } else {
+        Vec::new()
+    };
 
     // An exact-path entry this run's file set proves is gone accepts nothing,
     // and the commit that removed the file is where that is worth saying
@@ -82,6 +118,8 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
     let stale = stale_entries(options, &loaded, &files)?;
     let blocked = if report::has_hard_failure(&outcomes) {
         Blocked::Overflow
+    } else if report::has_soft_edit_promotion(&soft_edits) {
+        Blocked::PromotedSoft
     } else if !stale.is_empty() && loaded.config.exceptions.stale.fails() {
         Blocked::DeadEntry
     } else {
@@ -104,13 +142,13 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
                 blocked,
                 has_errors: !errors.is_empty(),
             };
-            (render_text(&text), Vec::new())
+            (render_text_with_soft_edits(&text, &soft_edits), Vec::new())
         }
         // stdout keeps the stable findings shape, so the block about a registry
         // goes to stderr — where it is still the run's own account of why it
         // failed, rather than an unexplained exit code (§FS-004-check-audit.5).
         Format::Json => (
-            render_json(&outcomes, &contexts),
+            render_json(&outcomes, &contexts, &soft_edits),
             report::stale_blocks(&stale, false),
         ),
     };
@@ -191,8 +229,18 @@ struct Text<'a> {
     has_errors: bool,
 }
 
+#[cfg(test)]
 fn render_text(text: &Text<'_>) -> String {
-    let mut blocks = report::finding_blocks_with_context(text.outcomes, text.color, text.contexts);
+    render_text_with_soft_edits(text, &[])
+}
+
+fn render_text_with_soft_edits(text: &Text<'_>, soft_edits: &[SoftEdit]) -> String {
+    let mut blocks = report::finding_blocks_with_staged_context(
+        text.outcomes,
+        text.color,
+        text.contexts,
+        soft_edits,
+    );
 
     // The marker is withheld when a file could not be measured: `ok` next to an
     // exit-2 diagnostic would be a lie (§FS-004-check-audit.5). The run still
@@ -219,6 +267,7 @@ fn render_text(text: &Text<'_>) -> String {
             }
             Blocked::No => {}
             Blocked::Overflow => blocks.push(report::COMMIT_GATE.to_owned()),
+            Blocked::PromotedSoft => blocks.push(report::COMMIT_GATE_PROMOTED.to_owned()),
             Blocked::DeadEntry => blocks.push(report::COMMIT_GATE_STALE.to_owned()),
         }
     }
@@ -227,11 +276,15 @@ fn render_text(text: &Text<'_>) -> String {
     blocks.join("\n\n")
 }
 
-fn render_json(outcomes: &[Outcome], contexts: &[report::FindingContext]) -> String {
+fn render_json(
+    outcomes: &[Outcome],
+    contexts: &[report::FindingContext],
+    soft_edits: &[SoftEdit],
+) -> String {
     let records: Vec<Json> = outcomes
         .iter()
         .filter(|outcome| outcome.is_reported())
-        .map(|outcome| report::overflow_json_with_context(outcome, contexts))
+        .map(|outcome| report::overflow_json_with_staged_context(outcome, contexts, soft_edits))
         .collect();
     Json::Array(records).render()
 }

@@ -32,6 +32,13 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+### Changed
+
+- §FS-001-config.3, §FS-004-check-audit.1.4: soft findings now demand a
+  current-commit split or recorded-debt decision, and `check --staged` blocks a
+  history-proven continuous over-soft run at the rule's `soft_edit_limit`, while
+  incomplete history stays advisory. (PR #TBD)
+
 ## 2. [0.9.1] — 2026-09-07
 
 ### Added

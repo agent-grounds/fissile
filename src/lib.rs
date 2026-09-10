@@ -29,6 +29,7 @@ pub mod remove;
 pub mod report;
 pub mod retune;
 pub mod scan;
+mod staged_history;
 mod toml_lines;
 
 pub use glob::Glob;
@@ -164,8 +165,8 @@ pub struct Rule {
     pub id: String,
     pub selector: Selector,
     pub budget: Budget,
-    /// Guidance for a soft overflow: what to do the next time the file is
-    /// touched, and when to record the file instead (§DF-003-severity-guidance.1).
+    /// Guidance for a soft overflow: what to split or record in the current
+    /// commit (§DF-003-severity-guidance.1).
     pub soft_message: MessageTemplate,
     /// Guidance for a hard overflow: what has to happen before more code lands,
     /// and who to escalate to (§DF-003-severity-guidance.1).

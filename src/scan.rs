@@ -428,6 +428,25 @@ fn measure_content(rel: &str, bytes: &[u8]) -> MeasuredFile {
     }
 }
 
+/// Measure a historical Git blob with the same byte, line, and optional token
+/// policy used for the staged blob (§FS-004-check-audit.1.4). Git object
+/// retrieval is batched by the caller; only an opt-in token command may need a
+/// process for this individual version.
+pub(crate) fn measure_history_blob(
+    root: &Path,
+    rel: &str,
+    bytes: &[u8],
+    tokens: &Tokens,
+) -> io::Result<FileMeasurement> {
+    let mut measured = measure_content(rel, bytes);
+    if tokens.enabled
+        && let Some(count) = run_token_command_for_staged_bytes(root, &tokens.command, rel, bytes)?
+    {
+        measured.measurement = measured.measurement.with_tokens(count);
+    }
+    Ok(measured.measurement)
+}
+
 /// Physical lines in arbitrary bytes: `\n` count plus an unterminated tail.
 fn count_raw_lines(bytes: &[u8]) -> u64 {
     let newlines = bytes.iter().filter(|&&byte| byte == b'\n').count() as u64;
