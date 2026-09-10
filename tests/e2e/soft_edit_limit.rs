@@ -65,8 +65,9 @@ impl Work {
     fn new(name: &str) -> Self {
         let scratch = std::env::var_os("FISSILE_E2E_SCRATCH").map_or_else(
             || {
-                let home =
-                    std::env::var_os("HOME").expect("HOME names the test scratch filesystem");
+                let home = std::env::var_os("HOME")
+                    .or_else(|| std::env::var_os("USERPROFILE"))
+                    .expect("HOME or USERPROFILE names the test scratch filesystem");
                 PathBuf::from(home).join("f/tmp")
             },
             PathBuf::from,
@@ -130,6 +131,8 @@ fn initialize(root: &Path, config: &str) {
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join(".agent-grounds/fissile.toml"), config).unwrap();
     git(root, ["init", "-q", "-b", "main"]);
+    git(root, ["config", "user.email", "e2e@fissile.invalid"]);
+    git(root, ["config", "user.name", "e2e"]);
 }
 
 fn write_lines(root: &Path, count: usize) {
