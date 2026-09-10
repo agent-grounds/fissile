@@ -39,7 +39,8 @@ const NO_RULES: &str = "no rules configured";
 pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
     // The config and nothing else: the registries add nothing to the answer and
     // could only stop it being given while a tree is broken (§FS-010-limits.5).
-    let (config, source) = Config::discover(&options.root, options.config_path.as_deref())?;
+    let (config, source, soft_edit_limits) =
+        Config::discover_with_soft_edit_limits(&options.root, options.config_path.as_deref())?;
     let checker = config.to_checker()?;
     let format = options
         .format
@@ -53,12 +54,18 @@ pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
         Format::Text => rules
             .iter()
             .copied()
-            .map(text_line)
+            .map(|scope| text_line(scope, &soft_edit_limits))
             .collect::<Vec<_>>()
             .join("\n"),
         Format::Json => Json::Object(vec![(
             "rules",
-            Json::Array(rules.iter().copied().map(rule_json).collect()),
+            Json::Array(
+                rules
+                    .iter()
+                    .copied()
+                    .map(|scope| rule_json(scope, &soft_edit_limits))
+                    .collect(),
+            ),
         )])
         .render(),
     };
@@ -71,7 +78,7 @@ pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
 /// `<id> [<include>, …] <unit> soft <N> hard <M>`, with only the thresholds the
 /// rule declares — a placeholder for the other would state a limit the config
 /// does not set (§FS-010-limits.3).
-fn text_line(scope: ScopedRule<'_>) -> String {
+fn text_line(scope: ScopedRule<'_>, soft_edit_limits: &crate::config::SoftEditLimits) -> String {
     let rule = scope.rule;
     let mut line = format!(
         "{} [{}]",
@@ -90,10 +97,14 @@ fn text_line(scope: ScopedRule<'_>) -> String {
         ));
     }
     line.push_str(&format!(" {}", rule.budget.unit));
-    for (label, value) in [("soft", rule.budget.soft), ("hard", rule.budget.hard)] {
-        if let Some(value) = value {
-            line.push_str(&format!(" {label} {value}"));
-        }
+    if let Some(soft) = rule.budget.soft {
+        line.push_str(&format!(
+            " soft {soft} soft-edit-limit {}",
+            soft_edit_limits.effective(&rule.id)
+        ));
+    }
+    if let Some(hard) = rule.budget.hard {
+        line.push_str(&format!(" hard {hard}"));
     }
     line
 }
@@ -117,7 +128,7 @@ fn include_patterns(selector: &Selector) -> Vec<String> {
 /// One rule as the machine surface (§FS-010-limits.4): the text form's fields,
 /// plus what a generator needs and a terminal reader does not. A field that
 /// would describe nothing is omitted, never nulled.
-fn rule_json(scope: ScopedRule<'_>) -> Json {
+fn rule_json(scope: ScopedRule<'_>, soft_edit_limits: &crate::config::SoftEditLimits) -> Json {
     let rule = scope.rule;
     let mut fields = vec![
         ("id", Json::str(rule.id.clone())),
@@ -144,10 +155,15 @@ fn rule_json(scope: ScopedRule<'_>) -> Json {
         ));
     }
     fields.push(("unit", Json::str(rule.budget.unit.to_string())));
-    for (key, value) in [("soft", rule.budget.soft), ("hard", rule.budget.hard)] {
-        if let Some(value) = value {
-            fields.push((key, Json::UInt(value)));
-        }
+    if let Some(soft) = rule.budget.soft {
+        fields.push(("soft", Json::UInt(soft)));
+        fields.push((
+            "soft_edit_limit",
+            Json::UInt(soft_edit_limits.effective(&rule.id)),
+        ));
+    }
+    if let Some(hard) = rule.budget.hard {
+        fields.push(("hard", Json::UInt(hard)));
     }
     // Always present: every rule has one, and it is what settles an overlap
     // between two of them (§FS-001-config.3.2).

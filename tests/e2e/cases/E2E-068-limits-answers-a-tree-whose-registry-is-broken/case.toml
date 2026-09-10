@@ -4,4 +4,4 @@
 args = ["limits", "--no-color"]
 exit = 0
 stdout_equals = """
-rust [src/**/*.rs] lines soft 2 hard 4"""
+rust [src/**/*.rs] lines soft 2 soft-edit-limit 5 hard 4"""

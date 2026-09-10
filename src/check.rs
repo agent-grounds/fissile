@@ -98,7 +98,9 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
                     rule_id: overflow.rule_id.clone(),
                     unit: overflow.unit,
                     soft_limit: overflow.limit,
-                    edit_limit: spec.effective_soft_edit_limit(),
+                    edit_limit: loaded.soft_edit_limits.effective(&spec.id),
+                    include: spec.include.iter().map(crate::Glob::new).collect(),
+                    exclude: spec.exclude.iter().map(crate::Glob::new).collect(),
                     count_blank_lines: hit.rule.count_blank_lines,
                     count_comment_lines: hit.rule.count_comment_lines,
                 });

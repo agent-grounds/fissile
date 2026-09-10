@@ -2,4 +2,4 @@
 # than emitted as an empty array or null (§FS-010-limits.4).
 args = ["limits", "--format", "json"]
 exit = 0
-stdout_equals = '{"rules":[{"id":"bytes-catch-all","include":["**/*"],"unit":"bytes","soft":1,"priority":0,"soft_message":"too-large"},{"id":"citable-spec","include":["docs/**/*.md"],"exclude":["docs/changelog/0.2.0.md"],"unit":"lines","soft":1,"priority":0,"soft_message":"too-large","count_blank_lines":false,"count_comment_lines":true}]}'
+stdout_equals = '{"rules":[{"id":"bytes-catch-all","include":["**/*"],"unit":"bytes","soft":1,"soft_edit_limit":5,"priority":0,"soft_message":"too-large"},{"id":"citable-spec","include":["docs/**/*.md"],"exclude":["docs/changelog/0.2.0.md"],"unit":"lines","soft":1,"soft_edit_limit":5,"priority":0,"soft_message":"too-large","count_blank_lines":false,"count_comment_lines":true}]}'

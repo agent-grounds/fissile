@@ -7,7 +7,7 @@ exit = 0
 # stderr: `limits` output is a stream a reader diffs against the config, and
 # the JSON surface of every other command is one a caller parses.
 stdout_equals = """
-from-the-deprecated-home [notes/*.md] lines soft 40"""
+from-the-deprecated-home [notes/*.md] lines soft 40 soft-edit-limit 5"""
 stderr_contains = [
   ".agents/fissile.toml is deprecated; move it to .agent-grounds/fissile.toml",
 ]

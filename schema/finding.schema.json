@@ -15,6 +15,27 @@
     "message_id",
     "message"
   ],
+  "dependentRequired": {
+    "soft_edit_count": ["soft_edit_limit", "soft_edit_history_complete"],
+    "soft_edit_limit": ["soft_edit_count", "soft_edit_history_complete"],
+    "soft_edit_history_complete": ["soft_edit_count", "soft_edit_limit"],
+    "promotion": ["soft_edit_count", "soft_edit_limit", "soft_edit_history_complete"]
+  },
+  "allOf": [
+    {
+      "if": { "required": ["soft_edit_count"] },
+      "then": { "properties": { "severity": { "const": "soft" } } }
+    },
+    {
+      "if": { "required": ["promotion"] },
+      "then": {
+        "properties": {
+          "severity": { "const": "soft" },
+          "soft_edit_history_complete": { "const": true }
+        }
+      }
+    }
+  ],
   "properties": {
     "path": {
       "type": "string",
@@ -38,7 +59,7 @@
     "severity": {
       "type": "string",
       "enum": ["soft", "hard"],
-      "description": "`hard` fails the commit; `soft` warns (GOAL-006-graded-limits)."
+      "description": "`hard` fails the commit; `soft` warns unless a staged history-proven edit count reaches its soft edit limit (GOAL-006-graded-limits, FS-004-check-audit.1.4)."
     },
     "rule_id": {
       "type": "string",
@@ -61,6 +82,24 @@
       "type": "integer",
       "minimum": 0,
       "description": "Present only on silenced `audit` records: the maximum value the exception accepts."
+    },
+    "soft_edit_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The current staged edit plus the proven continuous committed over-soft edits for this rule. Present only on staged soft findings (FS-004-check-audit.1.4)."
+    },
+    "soft_edit_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The effective per-rule count at which a history-complete staged soft finding blocks. Present only on staged soft findings (FS-004-check-audit.1.4)."
+    },
+    "soft_edit_history_complete": {
+      "type": "boolean",
+      "description": "Whether Git history proves the continuous run back to a reset or absence. False disables promotion (FS-004-check-audit.1.4)."
+    },
+    "promotion": {
+      "const": "soft_edit_limit",
+      "description": "Present only when a history-complete staged soft finding reached its edit limit and therefore blocks (FS-004-check-audit.1.4)."
     }
   }
 }
