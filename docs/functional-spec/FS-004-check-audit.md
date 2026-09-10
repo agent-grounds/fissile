@@ -14,9 +14,11 @@ fissile check [<paths>...] [--staged] [--config <path>] [--format text|json] [--
 `check --staged` receives the file set from git and applies `[scan].exclude`.
 Without `--staged`, `check` evaluates the paths passed by the caller or the
 configured scan scope. A file strictly above a soft limit produces a finding
-and exits `0` unless a matching soft exception applies; equality passes. A file
-strictly above a hard limit produces a finding and exits non-zero unless a
-matching hard exception applies; equality passes. Severity is not configurable.
+and exits `0` unless a matching soft exception applies; equality passes. On
+`check --staged`, a history-proven continuous run of over-soft edits can promote
+that soft finding into a commit block (§1.4). A file strictly above a hard limit
+produces a finding and exits non-zero unless a matching hard exception applies;
+equality passes. Severity and promotion are not invocation-time knobs.
 This is the stable
 CI/pre-commit contract: the same config must produce the same pass/fail result
 locally and remotely (§GOAL-003-friendly-output).
@@ -35,8 +37,8 @@ hard: 2 files over the 550-line budget [rule: rust-source, message: split-rust-h
     src/domain/invoice.rs: 588 non-blank lines (budget 550; an exception here would accept 600)
 
 soft: 1 file over the 350-line budget [rule: rust-source, message: split-rust-soft]
-  Should split the next time you touch it. If no split leaves the architecture
-  cleaner, record it with `fissile exception add --severity soft`.
+  Split now or record the debt now. If no split leaves the architecture cleaner,
+  record it with `fissile exception add --severity soft`.
     src/domain/tax.rs: 402 non-blank lines (budget 350; an exception here would accept 500)
 ```
 
@@ -227,6 +229,13 @@ JSON output emits one record per overflow with at least:
 - `exception_would_accept`, when the finding names a ceiling
 - `exception_max`, when applicable in audit's silenced output
 
+A staged soft finding additionally carries `soft_edit_count`,
+`soft_edit_limit`, and `soft_edit_history_complete`. A promoted one retains
+`"severity":"soft"` and adds `"promotion":"soft_edit_limit"`; a true hard
+size overflow carries none of those fields. This keeps the exception route and
+the reason for the blocking exit machine-visible without misreporting a soft
+overflow as a hard-size overflow (§1.4).
+
 `exception_would_accept` carries the same number the text detail names and is
 omitted wherever the text withholds it, so a consumer of `--format json` chooses
 between the plain and the stated form on the same facts a reader of the text
@@ -242,6 +251,58 @@ is the stable machine contract and grows no second record shape for it: the
 stale block goes to stderr, which already owns every diagnostic a JSON run emits
 (§5). What is ruled out is the one shape a consumer cannot act on — an empty
 array, a failing exit code, and nothing anywhere saying why.
+
+### 1.4 Bounded grace for staged soft edits
+
+The soft tier asks for a decision in the commit that encounters it: split now,
+or record the soft-limit debt now. It is a bounded grace period rather than a
+permanent consequence-free warning. For each staged regular file that is above
+its effective rule's soft limit, below or equal to its hard limit, and not
+accepted by a matching soft exception, `check --staged` derives a continuous
+over-soft edit count for that rule (§FS-001-config.3):
+
+1. The current staged edit counts. When it is the edit that crosses from a
+   committed version at or below the soft limit, its count is `1`.
+2. Walking committed history backwards from `HEAD`, each commit that edited the
+   same file while its resulting version remained above the soft limit counts.
+   Commits that did not edit it do not count. A rename is followed when Git can
+   establish it.
+3. The run ends at the most recent committed version at or below the soft limit,
+   or at an established absence of the file. That boundary resets the count, so
+   a later staged crossing starts again at `1`.
+
+Counts below the rule's `soft_edit_limit` remain advisory and exit `0`. A count
+equal to or greater than the limit is a **promoted soft finding** and makes the
+staged check exit non-zero. With the default limit `5`, edits 1 through 4 warn
+and edit 5 blocks. The promotion is still soft-limit debt: text begins `soft
+(promoted):`, its detail says `soft edits <count>/<limit>; promoted to
+blocking`, and its commit-gate epilogue directs the caller to split or add a
+soft exception. It never uses the hard-size heading, guidance, exception route,
+or provenance.
+
+From the first staged soft finding, its text detail says `soft edits
+<count>/<limit>`. JSON carries `soft_edit_count`, `soft_edit_limit`, and
+`soft_edit_history_complete`; only a blocking promotion carries
+`"promotion":"soft_edit_limit"`. Files with different counts or limits may
+remain in one guidance block because these values are per-file details.
+
+History is evidence for a block, never a guess. If the repository is shallow,
+Git is unavailable, the input is not in a repository, a rename cannot be
+followed far enough, or the available history ends while the file is still over
+soft, fissile reports only the count it can establish with
+`soft_edit_history_complete = false` and keeps the finding advisory even when
+that visible count reaches the configured limit. Text adds `history incomplete;
+promotion disabled` to that file's edit clause. Plain `check`, `audit`, and the
+library checker are snapshot surfaces: they neither inspect history nor attach
+edit metadata, and a soft overflow on them does not block.
+
+Size and exceptions take precedence over edit promotion. A true hard-size
+overflow reports only hard. If a hard exception exposes the soft tier under
+§FS-003-exceptions.3, the edit rule applies to that remaining soft debt; a
+structural hard exception continues to silence it. A matching soft exception is
+applied before edit promotion and silences the finding both below and at or
+above the edit limit. Thus the same repository decision retires repeated soft
+debt before and after it becomes commit-blocking (§DF-013-bounded-soft-grace).
 
 ## 2. Audit
 

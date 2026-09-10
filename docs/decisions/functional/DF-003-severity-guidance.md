@@ -1,8 +1,8 @@
 # DF-003-severity-guidance: Soft and hard overflows carry different instructions, and neither cites another repository's docs.
 
 A soft overflow and a hard overflow are not the same request at two volumes.
-Soft says *should split, next time you are here*; hard says *must split before
-more code lands*. Each needs its own next step, and each needs its own way out
+Soft says *split now or record the debt now*; hard says *must split before more
+code lands*. Each needs its own next step, and each needs its own way out
 for the reader who cannot split the file without damaging it. `fissile` gives a
 rule one message per severity, and ships defaults that name the escape hatch
 instead of demanding a split unconditionally (§GOAL-008-remediation-messages).
@@ -13,8 +13,8 @@ A rule resolves guidance per severity: `soft_message` and `hard_message`
 override the shared `message` for their own severity (§FS-001-config.4). The
 built-in defaults use that slot for three things beyond "split this file".
 
-- **The soft message bounds the split.** It asks for the split the next time the
-  file is touched, and says what not to do: never break up code that belongs
+- **The soft message bounds the split.** It asks for a split or a recorded-debt
+  decision in the current commit, and says what not to do: never break up code that belongs
   together, never add indirection to fit a line count. A file whose only
   available split would make the architecture worse is not a failure to fix —
   it is debt to record with `fissile exception add --severity soft`.

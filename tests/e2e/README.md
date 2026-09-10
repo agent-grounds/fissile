@@ -24,6 +24,11 @@ A case directory holds:
 The harness drives the real `fissile` binary, so every documented behavior under
 `docs/functional-spec/` has at least one executable scenario.
 
+The bounded soft-edit contract in `soft_edit_limit.rs` creates real complete and
+shallow Git histories rather than copying a static tree. It proves the crossing,
+threshold, reset, exception, precedence, and fail-open behavior of
+§FS-004-check-audit.1.4, plus the generated current-commit guidance.
+
 ## Scenarios
 
 - `E2E-001-check-clean` — a clean check prints `ok` and exits zero.

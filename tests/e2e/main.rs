@@ -11,6 +11,8 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+mod soft_edit_limit;
+
 /// One scenario manifest (`case.toml`). Unknown keys are rejected: a misspelled
 /// key would otherwise drop the assertion it names, and a dropped assertion is a
 /// passing case that checks nothing.
