@@ -17,6 +17,7 @@ pub mod entrypoint;
 pub mod exception;
 pub mod exceptions;
 mod glob;
+mod history;
 pub mod hook;
 pub mod init;
 pub mod json;

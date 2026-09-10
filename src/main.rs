@@ -281,6 +281,10 @@ fn run_audit(args: &[String]) -> ExitCode {
             "--no-color" => options.no_color = true,
             "--stale-exceptions" => options.stale_exceptions = true,
             "--rule-coverage" => options.rule_coverage = true,
+            "--history" => match value(&mut iter, "--history") {
+                Ok(range) => options.history = Some(range),
+                Err(message) => return usage_fail("audit", &message, AUDIT_USAGE),
+            },
             "--config" => match value(&mut iter, "--config") {
                 Ok(path) => options.config_path = Some(PathBuf::from(path)),
                 Err(message) => return usage_fail("audit", &message, AUDIT_USAGE),
@@ -317,6 +321,13 @@ fn run_audit(args: &[String]) -> ExitCode {
     // a parameter, so naming it does not supply the count.
     if options.selects(Section::Top) && options.top.is_none() {
         return usage_fail("audit", "--only top requires --top <N>", AUDIT_USAGE);
+    }
+    if options.selects(Section::History) && options.history.is_none() {
+        return usage_fail(
+            "audit",
+            "--only history requires --history <from>..<to>",
+            AUDIT_USAGE,
+        );
     }
     if options.only.is_some() && options.format == Some(Format::Json) {
         return usage_fail(
