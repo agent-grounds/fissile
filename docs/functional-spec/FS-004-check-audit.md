@@ -263,10 +263,14 @@ over-soft edit count for that rule (§FS-001-config.3):
 
 1. The current staged edit counts. When it is the edit that crosses from a
    committed version at or below the soft limit, its count is `1`.
-2. Walking committed history backwards from `HEAD`, each commit that edited the
-   same file while its resulting version remained above the soft limit counts.
-   Commits that did not edit it do not count. A rename is followed when Git can
-   establish it.
+2. Walking every commit reachable from `HEAD` backwards, each commit that
+   introduces a file version distinct from its parent while that resulting
+   version remained above the soft limit counts. Commits that did not edit it do
+   not count. A merge whose version equals either parent imports history but is
+   not another edit; a merge resolution distinct from every parent counts once.
+   The effective rule's include and exclude scope is applied to every historical
+   name. A rename from outside that scope into it is the first governed edit;
+   versions under the old out-of-scope name cannot consume its grace.
 3. The run ends at the most recent committed version at or below the soft limit,
    or at an established absence of the file. That boundary resets the count, so
    a later staged crossing starts again at `1`.
@@ -286,10 +290,13 @@ From the first staged soft finding, its text detail says `soft edits
 `"promotion":"soft_edit_limit"`. Files with different counts or limits may
 remain in one guidance block because these values are per-file details.
 
-History is evidence for a block, never a guess. If the repository is shallow,
-Git is unavailable, the input is not in a repository, a rename cannot be
-followed far enough, or the available history ends while the file is still over
-soft, fissile reports only the count it can establish with
+History is evidence for a block, never a guess. The walk measures versions only
+until it proves the most recent reset or absence; versions behind that boundary
+do not invoke a configured token counter. If the repository is shallow, Git is
+unavailable, the input is not in a repository, a rename or rule scope cannot be
+followed far enough, a merge graph cannot prove one uninterrupted over-soft
+run, or the available history ends while the file is still over soft, fissile
+reports only the count it can establish with
 `soft_edit_history_complete = false` and keeps the finding advisory even when
 that visible count reaches the configured limit. Text adds `history incomplete;
 promotion disabled` to that file's edit clause. Plain `check`, `audit`, and the

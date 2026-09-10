@@ -35,6 +35,13 @@ const SILENCED_EXTRA: &[&str] = &["exception_max"];
 /// records do not carry it — the entry that already accepts the file reports
 /// its own ceiling as `exception_max` instead.
 const STANDING_EXTRA: &[&str] = &["exception_would_accept"];
+/// Provenance carried only by staged soft findings (§FS-004-check-audit.1.4).
+const STAGED_SOFT_EXTRA: &[&str] = &[
+    "soft_edit_count",
+    "soft_edit_limit",
+    "soft_edit_history_complete",
+    "promotion",
+];
 
 // Values in the fixture are free of `,` and `:` so a flat object splits cleanly.
 const CONFIG: &str = r#"
@@ -105,7 +112,12 @@ fn array_objects(array: &str) -> Vec<String> {
 #[test]
 fn schema_declares_every_finding_field() {
     let finding = fs::read_to_string(schema_dir().join("finding.schema.json")).unwrap();
-    for field in REQUIRED.iter().chain(SILENCED_EXTRA).chain(STANDING_EXTRA) {
+    for field in REQUIRED
+        .iter()
+        .chain(SILENCED_EXTRA)
+        .chain(STANDING_EXTRA)
+        .chain(STAGED_SOFT_EXTRA)
+    {
         assert!(
             finding.contains(&format!("\"{field}\"")),
             "schema/finding.schema.json is missing field `{field}`"
@@ -294,7 +306,7 @@ fn measure_records_match_the_published_schema() {
 fn limits_records_match_the_published_schema() {
     let root = temp_repo();
     let run = limits::run(&LimitsOptions {
-        root,
+        root: root.clone(),
         config_path: None,
         format: Some(Format::Json),
         no_color: false,
@@ -314,6 +326,7 @@ fn limits_records_match_the_published_schema() {
         "include",
         "priority",
         "soft",
+        "soft_edit_limit",
         "soft_message",
         "unit",
     ]
@@ -330,9 +343,25 @@ fn limits_records_match_the_published_schema() {
         run.output
     );
     assert!(
-        run.output.contains(r#""soft":100,"hard":200"#),
+        run.output
+            .contains(r#""soft":100,"soft_edit_limit":5,"hard":200"#),
         "{}",
         run.output
+    );
+
+    let explicit = CONFIG.replace("soft = 100", "soft = 100\nsoft_edit_limit = 2");
+    fs::write(root.join(".agent-grounds/fissile.toml"), explicit).unwrap();
+    let explicit_run = limits::run(&LimitsOptions {
+        root,
+        config_path: None,
+        format: Some(Format::Json),
+        no_color: false,
+    })
+    .expect("limits accepts an explicit edit limit");
+    assert!(
+        explicit_run.output.contains(r#""soft_edit_limit":2"#),
+        "{}",
+        explicit_run.output
     );
 
     let schema = fs::read_to_string(schema_dir().join("limits.schema.json")).unwrap();

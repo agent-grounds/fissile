@@ -139,6 +139,15 @@ fn write_lines(root: &Path, count: usize) {
     fs::write(root.join("src/debt.rs"), content).unwrap();
 }
 
+fn write_named_lines(root: &Path, relative: &str, count: usize, name: &str) {
+    let content = (1..=count)
+        .map(|line| format!("fn {name}_{line}() {{}}\n"))
+        .collect::<String>();
+    let path = root.join(relative);
+    fs::create_dir_all(path.parent().expect("fixture path has a parent")).unwrap();
+    fs::write(path, content).unwrap();
+}
+
 fn stage(root: &Path) {
     git(root, ["add", "-A"]);
 }
@@ -205,6 +214,43 @@ fn expect_run(
             ),
         );
     }
+}
+
+fn assert_promoted_record_matches_closed_schema(output: &str) {
+    let records: serde_json::Value = serde_json::from_str(output).expect("finding JSON parses");
+    let record = records
+        .as_array()
+        .and_then(|records| records.first())
+        .and_then(serde_json::Value::as_object)
+        .expect("one finding object");
+    let schema_text = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema/finding.schema.json"),
+    )
+    .unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&schema_text).expect("schema JSON parses");
+    assert_eq!(schema["additionalProperties"], false);
+    let properties = schema["properties"].as_object().expect("schema properties");
+    for key in record.keys() {
+        assert!(
+            properties.contains_key(key),
+            "closed finding schema rejects emitted key {key}"
+        );
+    }
+    for key in [
+        "soft_edit_count",
+        "soft_edit_limit",
+        "soft_edit_history_complete",
+        "promotion",
+    ] {
+        assert!(record.contains_key(key), "promoted record misses {key}");
+        assert!(properties.contains_key(key), "schema misses {key}");
+    }
+    assert_eq!(properties["soft_edit_count"]["type"], "integer");
+    assert_eq!(properties["soft_edit_count"]["minimum"], 1);
+    assert_eq!(properties["soft_edit_limit"]["type"], "integer");
+    assert_eq!(properties["soft_edit_limit"]["minimum"], 1);
+    assert_eq!(properties["soft_edit_history_complete"]["type"], "boolean");
+    assert_eq!(properties["promotion"]["const"], "soft_edit_limit");
 }
 
 fn message_block<'a>(config: &'a str, id: &str) -> &'a str {
@@ -350,6 +396,7 @@ fn staged_soft_debt_counts_promotes_resets_and_keeps_its_precedence() {
             "\"promotion\":\"soft_edit_limit\"",
         ],
     );
+    assert_promoted_record_matches_closed_schema(&stdout(&fifth_json));
 
     // Snapshot surfaces do not turn old debt into a failure or carry staged
     // edit provenance, even while the staged view is at its threshold.
@@ -586,5 +633,172 @@ fn explicit_limit_and_shallow_history_obey_the_proof_boundary() {
         problems.is_empty(),
         "config/history proof-boundary failures:\n{}",
         problems.join("\n\n")
+    );
+}
+
+#[test]
+fn rename_into_scope_starts_the_governed_count_at_one() {
+    let work = Work::new("rename-into-scope");
+    let config = DEFAULT_LIMIT_CONFIG.replace(
+        "soft = 2\nhard = 8",
+        "soft = 2\nsoft_edit_limit = 3\nhard = 8",
+    );
+    initialize(&work.0, &config);
+    write_named_lines(&work.0, "notes/debt.txt", 4, "outside1");
+    commit(&work.0, "outside rule one");
+    for edit in 2..=4 {
+        write_named_lines(&work.0, "notes/debt.txt", 4, &format!("outside{edit}"));
+        commit(&work.0, &format!("outside rule {edit}"));
+    }
+    git(&work.0, ["mv", "notes/debt.txt", "src/debt.rs"]);
+
+    let renamed = run(&work.0, ["check", "--staged", "--no-color"]);
+    assert_eq!(status(&renamed), 0, "{}", output_text(&renamed));
+    assert!(
+        stdout(&renamed).contains("soft edits 1/3"),
+        "{}",
+        output_text(&renamed)
+    );
+}
+
+#[test]
+fn merged_branch_edits_count_without_counting_the_importing_merge() {
+    let work = Work::new("merged-branch");
+    let config = DEFAULT_LIMIT_CONFIG.replace(
+        "soft = 2\nhard = 8",
+        "soft = 2\nsoft_edit_limit = 4\nhard = 8",
+    );
+    initialize(&work.0, &config);
+    write_lines(&work.0, 2);
+    commit(&work.0, "at soft limit");
+    git(&work.0, ["switch", "-qc", "side"]);
+    for count in 3..=5 {
+        write_lines(&work.0, count);
+        commit(&work.0, &format!("side edit {}", count - 2));
+    }
+    git(&work.0, ["switch", "-q", "main"]);
+    fs::write(work.0.join("unrelated.txt"), "main\n").unwrap();
+    commit(&work.0, "unrelated main edit");
+    git(
+        &work.0,
+        ["merge", "-q", "--no-ff", "side", "-m", "merge side"],
+    );
+    write_lines(&work.0, 6);
+    stage(&work.0);
+
+    let merged = run(&work.0, ["check", "--staged", "--no-color"]);
+    assert_eq!(status(&merged), 1, "{}", output_text(&merged));
+    assert!(
+        stdout(&merged).contains("soft edits 4/4; promoted to blocking"),
+        "{}",
+        output_text(&merged)
+    );
+}
+
+#[test]
+fn a_merge_resolution_distinct_from_both_parents_counts_once() {
+    let work = Work::new("merge-resolution");
+    let config = DEFAULT_LIMIT_CONFIG.replace(
+        "soft = 2\nhard = 8",
+        "soft = 10\nsoft_edit_limit = 4\nhard = 20",
+    );
+    initialize(&work.0, &config);
+    let base = (1..=10)
+        .map(|line| format!("fn base_{line}() {{}}\n"))
+        .collect::<String>();
+    fs::write(work.0.join("src/debt.rs"), &base).unwrap();
+    commit(&work.0, "at soft limit");
+
+    git(&work.0, ["switch", "-qc", "side"]);
+    let side = base.replace("fn base_2() {}\n", "fn base_2() {}\nfn side() {}\n");
+    fs::write(work.0.join("src/debt.rs"), side).unwrap();
+    commit(&work.0, "side over soft");
+
+    git(&work.0, ["switch", "-q", "main"]);
+    let main = base.replace("fn base_8() {}\n", "fn base_8() {}\nfn main_edit() {}\n");
+    fs::write(work.0.join("src/debt.rs"), main).unwrap();
+    commit(&work.0, "main over soft");
+    git(
+        &work.0,
+        ["merge", "-q", "--no-ff", "side", "-m", "resolve both edits"],
+    );
+    let mut staged = fs::read_to_string(work.0.join("src/debt.rs")).unwrap();
+    staged.push_str("fn staged() {}\n");
+    fs::write(work.0.join("src/debt.rs"), staged).unwrap();
+    stage(&work.0);
+
+    let merged = run(&work.0, ["check", "--staged", "--no-color"]);
+    assert_eq!(status(&merged), 1, "{}", output_text(&merged));
+    assert!(
+        stdout(&merged).contains("soft edits 4/4; promoted to blocking"),
+        "{}",
+        output_text(&merged)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn token_history_stops_measuring_at_the_recent_reset() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let work = Work::new("bounded-token-work");
+    let counter = work.0.join("count-token-runs.sh");
+    let count_file = work.0.join("token-runs");
+    let script = format!(
+        "#!/bin/sh\nprintf 'run\\n' >> '{}'\nexec /usr/bin/wc -w \"$1\"\n",
+        count_file.display()
+    );
+    fs::create_dir_all(&work.0).unwrap();
+    fs::write(&counter, script).unwrap();
+    fs::set_permissions(&counter, fs::Permissions::from_mode(0o755)).unwrap();
+    let config = DEFAULT_LIMIT_CONFIG
+        .replace("unit = \"lines\"", "unit = \"tokens\"")
+        .replace(
+            "count_blank_lines = false\ncount_comment_lines = true\n",
+            "",
+        )
+        .replace("hard = 8", "hard = 50")
+        .replace(
+            "[[messages]]\nid = \"split-now\"",
+            &format!(
+                "[tokens]\nenabled = true\ncommand = [\"{}\", \"{{path}}\"]\n\n[[messages]]\nid = \"split-now\"",
+                counter.display()
+            ),
+        );
+    initialize(&work.0, &config);
+    for edit in 1..=10 {
+        fs::write(
+            work.0.join("src/debt.rs"),
+            format!("old over soft version {edit}\n"),
+        )
+        .unwrap();
+        commit(&work.0, &format!("old over-soft {edit}"));
+    }
+    fs::write(work.0.join("src/debt.rs"), "reset\n").unwrap();
+    commit(&work.0, "recent reset");
+    fs::write(
+        work.0.join("src/debt.rs"),
+        "recent crossing version eleven\n",
+    )
+    .unwrap();
+    commit(&work.0, "recent crossing");
+    fs::write(
+        work.0.join("src/debt.rs"),
+        "staged version twelve remains over\n",
+    )
+    .unwrap();
+    stage(&work.0);
+    let _ = fs::remove_file(&count_file);
+
+    let checked = run(&work.0, ["check", "--staged", "--no-color"]);
+    assert_eq!(status(&checked), 0, "{}", output_text(&checked));
+    assert!(stdout(&checked).contains("soft edits 2/5"));
+    let invocations = fs::read_to_string(&count_file)
+        .expect("token counter ran")
+        .lines()
+        .count();
+    assert_eq!(
+        invocations, 3,
+        "only staged, crossing, and reset versions are measured"
     );
 }
