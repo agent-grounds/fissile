@@ -24,7 +24,7 @@ content = "one\ntwo\nthree\nfour\nfive\n"
 
 [[commits.files]]
 path = "src/rename.rs"
-content = "one\ntwo\nthree\nfour\nfive\n"
+content = "rename one\nrename two\nrename three\nrename four\nrename five\n"
 
 [[commits.files]]
 path = "src/reset.rs"
@@ -36,7 +36,7 @@ content = "one\ntwo\nthree\nfour\nfive\n"
 
 [[commits.files]]
 path = "tests/old_home/case.rs"
-content = "one\ntwo\nthree\nfour\nfive\n"
+content = "test one\ntest two\ntest three\ntest four\ntest five\n"
 
 [[commits]]
 name = "base"

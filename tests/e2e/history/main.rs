@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serde::Deserialize;
 
 mod regressions;
+mod round_two;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

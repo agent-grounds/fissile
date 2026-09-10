@@ -1,7 +1,7 @@
 //! Bounded Git plumbing for historical audit snapshots
 //! (§FS-004-check-audit.2.1).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -133,9 +133,29 @@ impl Repository<'_> {
             .collect()
     }
 
-    pub fn is_shallow(&self) -> Result<bool, HistoryError> {
+    pub fn shallow_boundaries(&self) -> Result<BTreeSet<String>, HistoryError> {
         let output = self.run(&["rev-parse", "--is-shallow-repository"])?;
-        Ok(output.status.success() && output.stdout == b"true\n")
+        if !output.status.success() || output.stdout != b"true\n" {
+            return Ok(BTreeSet::new());
+        }
+        let output = self.run(&["rev-parse", "--git-path", "shallow"])?;
+        if !output.status.success() {
+            return Err(HistoryError::new(
+                self.range,
+                "shallow boundary metadata is unavailable",
+            ));
+        }
+        let raw = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let path = Path::new(&raw);
+        let path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.root.join(path)
+        };
+        let text = fs::read_to_string(path).map_err(|_| {
+            HistoryError::new(self.range, "shallow boundary metadata is unavailable")
+        })?;
+        Ok(text.lines().map(str::to_owned).collect())
     }
 
     pub fn materialize(&self, sha: &str) -> Result<Materialized, HistoryError> {
