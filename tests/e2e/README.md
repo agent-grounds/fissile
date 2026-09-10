@@ -29,6 +29,12 @@ shallow Git histories rather than copying a static tree. It proves the crossing,
 threshold, reset, exception, precedence, and fail-open behavior of
 §FS-004-check-audit.1.4, plus the generated current-commit guidance.
 
+History needs a real sequence of commits rather than one copied working tree.
+The `history/` harness materializes its checked-in TOML timelines with fixed
+committer dates, then exercises debt movement, continuous ages, rename evidence,
+and all-or-nothing refusals through the real binary
+(§FS-004-check-audit.2.1).
+
 ## Scenarios
 
 - `E2E-001-check-clean` — a clean check prints `ok` and exits zero.

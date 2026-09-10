@@ -1,0 +1,27 @@
+fissile_config_version = 1
+[scan]
+include = ["src", "tests"]
+exclude = []
+respect_gitignore = false
+[output]
+format = "text"
+color = "never"
+success = "ok"
+[exceptions]
+soft_registry = "docs/file-size-agent-exceptions.toml"
+hard_registry = "docs/file-size-human-exceptions.toml"
+stale = "ignore"
+[exceptions.bump]
+lines = 1
+bytes = 1
+tokens = 1
+[[messages]]
+id = "split"
+text = "Split it."
+[[rules]]
+id = "rust"
+include = ["src/**/*.rs", "tests/new_home/**/*.rs"]
+unit = "lines"
+soft = 3
+hard = 20
+message = "split"
