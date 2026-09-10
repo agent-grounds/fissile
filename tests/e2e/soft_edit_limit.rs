@@ -129,7 +129,7 @@ fn initialize(root: &Path, config: &str) {
     fs::create_dir_all(root.join(".agent-grounds")).unwrap();
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join(".agent-grounds/fissile.toml"), config).unwrap();
-    git(root, ["init", "-q"]);
+    git(root, ["init", "-q", "-b", "main"]);
 }
 
 fn write_lines(root: &Path, count: usize) {
