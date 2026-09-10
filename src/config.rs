@@ -235,6 +235,10 @@ pub struct RuleSpec {
     pub unit: UnitSpec,
     #[serde(default)]
     pub soft: Option<u64>,
+    /// Continuous staged edits allowed while the rule remains over `soft`.
+    /// `None` preserves the version-1 default of five (§FS-001-config.3).
+    #[serde(default)]
+    pub soft_edit_limit: Option<u64>,
     #[serde(default)]
     pub hard: Option<u64>,
     #[serde(default)]
@@ -254,6 +258,10 @@ pub struct RuleSpec {
 }
 
 impl RuleSpec {
+    pub(crate) fn effective_soft_edit_limit(&self) -> u64 {
+        self.soft_edit_limit.unwrap_or(5)
+    }
+
     /// The message ID used at `severity`: the severity-specific field when set,
     /// otherwise the shared `message` (§FS-001-config.3).
     pub fn message_id(&self, severity: Severity) -> Option<&str> {
@@ -505,6 +513,20 @@ impl Config {
                     rule: spec.id.clone(),
                 });
             }
+            if let Some(limit) = spec.soft_edit_limit {
+                if limit == 0 {
+                    return Err(ConfigError::InvalidSoftEditLimit {
+                        rule: spec.id.clone(),
+                        reason: "must be a positive integer".to_owned(),
+                    });
+                }
+                if spec.soft.is_none() {
+                    return Err(ConfigError::InvalidSoftEditLimit {
+                        rule: spec.id.clone(),
+                        reason: "requires a soft limit on the same rule".to_owned(),
+                    });
+                }
+            }
 
             let soft_template = resolve_message(spec, Severity::Soft, &messages)?;
             let hard_template = resolve_message(spec, Severity::Hard, &messages)?;
@@ -568,6 +590,10 @@ pub enum ConfigError {
         rule: String,
         severity: Severity,
     },
+    InvalidSoftEditLimit {
+        rule: String,
+        reason: String,
+    },
     Engine(FissileError),
     /// A load-time error tagged with the document it came from
     /// (§FS-001-config.1): `Config::load` wraps, `Config::parse` stays pathless.
@@ -614,6 +640,9 @@ impl fmt::Display for ConfigError {
                 f,
                 "rule {rule} declares a {severity} limit with no message; set {severity}_message or message"
             ),
+            ConfigError::InvalidSoftEditLimit { rule, reason } => {
+                write!(f, "rule {rule} has invalid soft_edit_limit: {reason}")
+            }
             ConfigError::Engine(error) => write!(f, "{error}"),
         }
     }

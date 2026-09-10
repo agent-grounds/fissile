@@ -66,10 +66,10 @@ command = ["token-counter", "--count", "{path}"]
 # decides where extracted code belongs. Cite only IDs declared in *this*
 # repository; an ID borrowed from another project resolves nowhere here.
 #
-# Soft and hard are separate messages on purpose: a warning asks for a split
-# next time the file is touched, a block has to say what to do when no safe
-# split exists. Keep both escape hatches in the text — a rule that only ever
-# says "split this" gets satisfied by bad splits.
+# Soft and hard are separate messages on purpose: a warning asks for a split or
+# a recorded decision in the current commit, while a hard block says what to do
+# when no safe split exists. Keep both escape hatches in the text — a rule that
+# only ever says "split this" gets satisfied by bad splits.
 #
 # Where a message names the exception route, keep it saying what the reason has
 # to establish, not merely that a reason is required: "record the debt" reads as
@@ -83,7 +83,7 @@ command = ["token-counter", "--count", "{path}"]
 [[messages]]
 id = "split-source-soft"
 text = """
-Should split, next time you are in one of these files: move a cohesive group of items into a sibling module. Split along a responsibility seam, never at the line count, and never break apart code that belongs together.
+Split now or record the debt now. Move a cohesive group of items into a sibling module along a responsibility seam, never at the line count, and never break apart code that belongs together.
 If no split leaves the design better than it is now, record why instead of forcing one — not what the file contains, which is what this finding already said. Name the constraint that makes splitting illegal (--kind structural), or the boundary that is missing and what must exist first (--kind deferred, --until naming what retires it):
 fissile exception add <path> --severity soft --rule {rule} --kind <kind>
 """
@@ -99,7 +99,7 @@ fissile exception add <path> --severity hard --rule {rule} --kind <kind>
 [[messages]]
 id = "split-doc-soft"
 text = """
-Should split, next time you edit one of these documents: a document this long is usually covering two subjects. Move the secondary one into a document of its own and link it from here. Split at a real section boundary — a link or a citation that stops resolving costs a reader more than the extra lines did.
+Split now or record the debt now. A document this long is usually covering two subjects; move the secondary one into a document of its own and link it from here. Split at a real section boundary — a link or a citation that stops resolving costs a reader more than the extra lines did.
 If the document has to be read as one piece, record it rather than cutting it up — naming what makes it indivisible (--kind structural), or the child document that does not exist yet (--kind deferred, --until naming what retires it):
 fissile exception add <path> --severity soft --rule {rule} --kind <kind>
 """
@@ -139,6 +139,7 @@ include = ["**/*"]
 exclude = []
 unit = "bytes"
 soft = 524288
+soft_edit_limit = 5
 hard = 1048576
 soft_message = "large-file-soft"
 hard_message = "large-file-hard"
@@ -161,6 +162,7 @@ include = [
 exclude = []
 unit = "lines"
 soft = 350
+soft_edit_limit = 5
 hard = 550
 count_blank_lines = false
 count_comment_lines = true
@@ -177,6 +179,7 @@ include = ["**/*.md"]
 exclude = []
 unit = "lines"
 soft = 750
+soft_edit_limit = 5
 hard = 2000
 count_blank_lines = false
 count_comment_lines = true
@@ -196,6 +199,7 @@ include = [
 exclude = []
 unit = "lines"
 soft = 250
+soft_edit_limit = 5
 hard = 500
 count_blank_lines = false
 count_comment_lines = true

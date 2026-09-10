@@ -56,9 +56,9 @@ enabled = false
 command = ["token-counter", "--count", "{path}"]
 
 # A tuned config names destinations the defaults cannot guess, and says
-# something different at each severity: soft asks for a split next time the file
-# is touched and offers the recorded-debt way out; hard says what has to happen
-# before more code lands and who to escalate to. Add a citation into this
+# something different at each severity: soft asks for a split or recorded debt
+# in the current commit; hard says what has to happen before more code lands and
+# who to escalate to. Add a citation into this
 # repository's own architecture docs if it keeps them — never an ID borrowed
 # from another project, which resolves nowhere for the reader who sees it.
 #
@@ -69,7 +69,7 @@ command = ["token-counter", "--count", "{path}"]
 [[messages]]
 id = "split-rust-soft"
 text = """
-Should split, next time you are in one of these modules: move a cohesive group of items into a sibling module under the same parent. Split along a responsibility seam, never at the line count.
+Split now or record the debt now. Move a cohesive group of items into a sibling module under the same parent, splitting along a responsibility seam, never at the line count.
 If no split leaves the design better, record why instead of forcing one: name the constraint that makes splitting illegal (--kind structural), or the module this code belongs in that does not exist yet (--kind deferred, --until naming what retires it):
 fissile exception add <path> --severity soft --rule {rule} --kind <kind>
 """
@@ -85,7 +85,7 @@ fissile exception add <path> --severity hard --rule {rule} --kind <kind>
 [[messages]]
 id = "split-doc-soft"
 text = """
-Should split, next time you edit one of these documents: a document this long is usually covering two subjects. Move the secondary one into a document of its own and link it from here, cutting at a real section boundary — a link or a citation that stops resolving costs a reader more than the extra lines did.
+Split now or record the debt now. A document this long is usually covering two subjects; move the secondary one into a document of its own and link it from here, cutting at a real section boundary — a link or a citation that stops resolving costs a reader more than the extra lines did.
 If the document has to be read as one piece, record it instead — naming what makes it indivisible (--kind structural), or the child document that does not exist yet (--kind deferred, --until naming what retires it):
 fissile exception add <path> --severity soft --rule {rule} --kind <kind>
 """
@@ -120,6 +120,7 @@ include = ["**/*"]
 exclude = []
 unit = "bytes"
 soft = 524288
+soft_edit_limit = 5
 hard = 1048576
 message = "large-file-default"
 
@@ -129,6 +130,7 @@ include = ["src/**/*.rs", "benches/**/*.rs"]
 exclude = []
 unit = "lines"
 soft = 350
+soft_edit_limit = 5
 hard = 550
 count_blank_lines = false
 count_comment_lines = true
@@ -141,6 +143,7 @@ include = ["src/**/*.gen.rs"]
 exclude = []
 unit = "lines"
 soft = 1200
+soft_edit_limit = 5
 hard = 2000
 count_blank_lines = false
 count_comment_lines = true
@@ -155,6 +158,7 @@ include = ["tests/**/*.rs"]
 exclude = []
 unit = "lines"
 soft = 450
+soft_edit_limit = 5
 hard = 700
 count_blank_lines = false
 count_comment_lines = true
@@ -174,6 +178,7 @@ include = ["docs/**/*.md"]
 exclude = []
 unit = "lines"
 soft = 750
+soft_edit_limit = 5
 hard = 2000
 count_blank_lines = false
 count_comment_lines = true
@@ -189,6 +194,7 @@ include = ["README.md", "AGENTS.md", "CLAUDE.md", "skills/**/*.md"]
 exclude = []
 unit = "lines"
 soft = 250
+soft_edit_limit = 5
 hard = 500
 count_blank_lines = false
 count_comment_lines = true
@@ -200,5 +206,6 @@ include = ["tests/fixtures/**", "e2e/cases/**"]
 exclude = []
 unit = "bytes"
 soft = 65536
+soft_edit_limit = 5
 hard = 262144
 message = "large-fixture"
