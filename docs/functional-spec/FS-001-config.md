@@ -120,6 +120,8 @@ Rules are declared as `[[rules]]` entries. Each rule has:
 - `exclude`: optional globs removed from this rule's scope, default `[]`;
 - `unit`: `bytes`, `lines`, or `tokens`;
 - `soft`: optional warning threshold;
+- `soft_edit_limit`: optional number of continuous over-soft edits allowed before
+  a staged soft finding blocks, default `5`;
 - `hard`: optional blocking threshold;
 - `priority`: optional integer tie-breaker, default `0`;
 - `message`: the ID of a `[[messages]]` template, used for both severities;
@@ -130,6 +132,15 @@ is required. Every declared threshold must resolve a message — from its own
 severity field or from `message` — or the config is invalid. A file above the
 hard limit reports only the hard overflow; the soft overflow is implied
 (§GOAL-006-graded-limits).
+
+`soft_edit_limit` is a positive integer and is valid only on a rule with a
+`soft` threshold. Omitting it from a version 1 config means `5`, including for
+configs written before the field existed. `fissile init` and the maintained
+example write it explicitly on every rule with a soft threshold, like every
+other default (§DF-002-explicit-config). The setting affects only the bounded
+staged-edit grace in §FS-004-check-audit.1.4; it does not add a third size
+threshold or change what `check` without `--staged`, `audit`, or the library
+checker considers soft or hard.
 
 Rule IDs are user-facing names, not incidental labels. They should read like
 bundle-size entries: `rust-source`, `api-docs`, `fixtures`, `generated-rust`.
