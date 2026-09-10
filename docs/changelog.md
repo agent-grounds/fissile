@@ -38,7 +38,7 @@ and at 0.x semver puts the minor number in charge of it.
   current-commit split or recorded-debt decision, and `check --staged` blocks a
   history-proven continuous over-soft run at the rule's `soft_edit_limit`, while
   incomplete history stays advisory. `fissile limits` reports the effective
-  allowance for every soft rule. (PR #TBD)
+  allowance for every soft rule. (PR #68)
 
 ## 2. [0.9.1] — 2026-09-07
 
