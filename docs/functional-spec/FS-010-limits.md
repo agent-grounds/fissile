@@ -64,8 +64,8 @@ not, the same reason `measure` names a file no rule measures
 One line per rule, no header and no banner (§GOAL-004-token-thrift.1):
 
 ```text
-rust-library [src/**/*.rs] lines soft 700 hard 900
-entrypoints [README.md, AGENTS.md] exclude [docs/changelog/*.md] lines soft 250 hard 500
+rust-library [src/**/*.rs] lines soft 700 soft-edit-limit 5 hard 900
+entrypoints [README.md, AGENTS.md] exclude [docs/changelog/*.md] lines soft 250 soft-edit-limit 5 hard 500
 config-toml [**/*.toml] bytes hard 262144
 ```
 
@@ -76,8 +76,11 @@ exclusion is spelled `exclude [<patterns>]` immediately after the include list;
 an omitted or empty list prints nothing, preserving the existing line exactly.
 The threshold spelling is `measure`'s — `soft <N>` then `hard <M>`, the same
 words in the same order — so a limit reads the same wherever fissile prints one
-(§FS-007-measure.2). A rule declaring only one of the two prints only that one:
-a placeholder for the other would invent a limit the config does not set.
+(§FS-007-measure.2). A soft threshold is immediately followed by
+`soft-edit-limit <N>`, reporting the effective bounded-grace setting: the
+configured value, or `5` when omitted (§FS-001-config.3). A rule declaring only
+hard prints neither a soft threshold nor an edit limit; a placeholder would
+invent a limit the config does not set.
 
 The include list is bracketed because a rule may name several patterns and a
 bare list of them would run into the unit. Every other field is separated by a
@@ -95,8 +98,8 @@ every consumer that already reads it; `audit` is an object for that reason
 (§FS-004-check-audit.2).
 
 Each element carries, in this order: `id`, `include` (an array of strings),
-`exclude` (an array of strings) when non-empty, `unit`, `soft`, `hard`,
-`priority`, `soft_message`, `hard_message`,
+`exclude` (an array of strings) when non-empty, `unit`, `soft`,
+`soft_edit_limit`, `hard`, `priority`, `soft_message`, `hard_message`,
 `count_blank_lines`, `count_comment_lines`. It carries more than the text form
 because this is the agent surface (§GOAL-004-token-thrift.1): a generator
 rendering a documentation table wants the message ids and the counting policy,
@@ -106,6 +109,8 @@ A field that would describe nothing is omitted, never nulled, exactly as a
 `measure` record omits a threshold that does not exist (§FS-007-measure.2):
 
 - `soft` and `hard` appear only where the rule declares them.
+- `soft_edit_limit` appears on every rule with `soft`, carrying its effective
+  configured value or the default `5`; it is omitted on a hard-only rule.
 - `exclude` appears only when the rule declares at least one pattern. An omitted
   list and `exclude = []` therefore preserve the existing JSON shape.
 - `soft_message` and `hard_message` are message ids, and each appears only where
