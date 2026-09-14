@@ -32,6 +32,8 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+## 2. [0.10.0] — 2026-09-14
+
 ### Changed
 
 - The links to the sibling tools now name `agent-grounds`, which `grund` and
@@ -80,20 +82,9 @@ and at 0.x semver puts the minor number in charge of it.
   incomplete history stays advisory. `fissile limits` reports the effective
   allowance for every soft rule. (PR #68)
 
-## 2. [0.9.1] — 2026-09-07
-
-### Added
-
-- Report intake: `.github/ISSUE_TEMPLATE/` carries four GitHub issue forms — bug
-  report, feature request, usability report, and token or time waste — each
-  applying the matching kind label (`bug`, `enhancement`, `usability`, `tokens`)
-  as the issue is opened, and `config.yml` turns blank issues off so no issue
-  can arrive without a kind. Every form asks for the fields that make a report
-  actionable: the context (command, directory, version), what happened, what was
-  expected, an optional workaround, and, on the token form, the cost. (PR #65)
-
 ## 3. Older releases
 
+- [0.9.1](changelog/0.9.1.md) — 2026-09-07: - Report intake: `.github/ISSUE_TEMPLATE/` carries four GitHub issue forms — bug report, feature request, usability report, and token or time waste — each applying the matching kind label (`bug`, `enhancement`, `usability`, `tokens`) as the issue is opened, and `config.yml` turns blank issues off so no issue can arrive without a kind.
 - [0.9.0](changelog/0.9.0.md) — 2026-09-05: - §FS-004-check-audit.2: `fissile audit --only <section>[,<section>]` prints the named sections of the text report and nothing else, so tuning config or pruning the registry stops paying for a findings block the reader is not looking at.
 - [0.8.3](changelog/0.8.3.md) — 2026-09-05: - §FS-001-config.8, §FS-002-init.2: the config's home is `.agent-grounds/fissile.toml`.
 - [0.8.2](changelog/0.8.2.md) — 2026-08-31: - §FS-001-config.0.1: the built-in defaults budget a Markdown file by how it is read.
