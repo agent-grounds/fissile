@@ -40,6 +40,21 @@ fn subcommand_help_fits_one_screen_and_shows_examples() {
     }
 }
 
+/// §FS-004-check-audit.1.4: help distinguishes the index/history-backed mode
+/// from path and no-path working-tree snapshots without exceeding one screen.
+#[test]
+fn issue_74_check_help_distinguishes_staged_history_from_snapshot_checks() {
+    let text = help(&["check", "--help"]);
+    let lines = text.lines().count();
+    assert!(lines <= MAX_HELP_LINES, "check help has {lines} lines");
+    for clause in [
+        "--staged checks index bytes and Git history",
+        "paths and plain check use working-tree snapshots",
+    ] {
+        assert!(text.contains(clause), "check help should state `{clause}`");
+    }
+}
+
 /// §FS-006-cli.2: each `exception` subcommand carries its own one-screen usage,
 /// so the shared screen stays a dispatcher rather than growing two flag lists.
 #[test]

@@ -282,4 +282,8 @@ fissile check --staged || exit 1
 
 `init` targets the repository's own `hooks/pre-commit` only. A repository that
 relocates hooks via `core.hooksPath` or drives them through a hook manager
-should wire `fissile check --staged` through that manager instead.
+should wire `fissile check --staged` through that manager instead. A hook
+manager that enforces bounded soft-edit promotion must run that command without
+injecting filenames; for pre-commit this means `pass_filenames: false`. A hook
+that calls `fissile check <paths>` is deliberately a working-tree snapshot
+check and keeps soft findings advisory (§FS-004-check-audit.1.4).
