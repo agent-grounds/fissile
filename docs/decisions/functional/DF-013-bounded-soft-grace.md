@@ -14,6 +14,14 @@ run since the file crossed the soft limit count; a committed version at or below
 soft resets the run. Earlier edits warn, and the edit at the limit promotes the
 soft finding into a commit block (§FS-004-check-audit.1.4).
 
+Caller-selected paths, plain no-path checks, audit, and the library checker do
+not inherit promotion. They are potentially divergent, Git-free snapshots:
+they may read working-tree bytes that differ from the index, and a path-list
+invocation does not prove that its caller is a commit hook. Equal bytes in one
+run do not supply either missing fact. Keeping those surfaces snapshot-only
+preserves their exit status and cost while reserving grace accounting for the
+invocation that selects the index and proves its history.
+
 Promotion changes consequence, not ownership. The finding remains soft debt,
 uses the soft message, and is silenced by the soft registry. A true hard-size
 overflow still wins and uses the hard route. This lets the repository make the
@@ -49,6 +57,11 @@ it.
 been edited often, but cannot show whether an unseen at-or-below-soft version
 reset the run. Blocking from that suffix would manufacture the premise of the
 decision.
+
+**Promote caller-selected snapshots.** Explicit paths can name a different
+working-tree snapshot from the index and can run without Git. Walking history
+would not make that selection equivalent to `--staged`, and would silently add
+blocking exits and repository work to callers that chose snapshot semantics.
 
 **Use the hard exception route after promotion.** Edit age does not turn the
 file into a hard-size overflow. Requiring human-reviewed hard debt would make

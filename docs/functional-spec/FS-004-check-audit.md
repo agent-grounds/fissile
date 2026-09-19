@@ -19,9 +19,11 @@ and exits `0` unless a matching soft exception applies; equality passes. On
 that soft finding into a commit block (§1.4). A file strictly above a hard limit
 produces a finding and exits non-zero unless a matching hard exception applies;
 equality passes. Severity and promotion are not invocation-time knobs.
-This is the stable
-CI/pre-commit contract: the same config must produce the same pass/fail result
-locally and remotely (§GOAL-003-friendly-output).
+This is the stable CI/pre-commit contract: the same invocation mode, selected
+content, config, and available history must produce the same pass/fail result
+locally and remotely (§GOAL-003-friendly-output). Equal index and working-tree
+bytes do not make a staged invocation and a snapshot invocation equivalent:
+only the staged invocation proves and spends edit history (§1.4).
 
 Text findings are grouped, one block per `(severity, rule, rendered guidance)`.
 The header names the severity, the file count, the crossed limit, the rule, and
@@ -140,38 +142,53 @@ commit with output that reads as advisory.
 A standing hard overflow:
 
 ```text
-commit blocked by fissile. Split the file, or ask a human for a reviewed hard
-exception. Bypassing with --no-verify leaves the overflow for review or CI.
+`fissile check --staged` rejected this staged snapshot. Split the file, or ask a
+human for a reviewed hard exception. If this command is the commit hook,
+bypassing it with `--no-verify` leaves the overflow for review or CI.
+```
+
+A promoted soft overflow (§1.4), which remains on the soft-debt route and
+explains why a filename-passing hook can accept the same bytes:
+
+```text
+`fissile check --staged` rejected this staged snapshot. Soft-edit promotion
+blocks a commit only when the hook runs that command; a hook that calls
+`fissile check <paths>` keeps soft findings advisory. Split now or record the
+debt with `fissile exception add <path> --severity soft --rule <rule> --kind
+<kind>`. Bypassing such a hook with `--no-verify` leaves the overflow for
+review or CI.
 ```
 
 A dead exception entry under `[exceptions].stale = "error"` (§1.3), where there
 is no file to split and the fix is in the registry the block above names:
 
 ```text
-commit blocked by fissile. Remove the exception entry above, or point it at the
-path its file moved to. Bypassing with --no-verify leaves a dead entry in the
-registry.
+`fissile check --staged` rejected this staged snapshot. Remove the exception
+entry above, or point it at the path its file moved to. If this command is the
+commit hook, bypassing it with `--no-verify` leaves a dead entry in the registry.
 ```
 
 A staged file that could not be measured, which exits 2 (§5) with nothing above
 accounting for it:
 
 ```text
-commit blocked by fissile. A staged file could not be measured, so nothing above
-accounts for it — fix the path the error names, or unstage it. Bypassing with
---no-verify commits a file fissile never checked.
+`fissile check --staged` rejected this staged snapshot. A staged file could not
+be measured, so nothing above accounts for it — fix the path the error names,
+or unstage it. If this command is the commit hook, bypassing it with
+`--no-verify` commits a file fissile never checked.
 ```
 
 A run blocked by more than one leads with the overflow, then the dead entry: the
 split is the largest thing to do, and each block is on screen above the epilogue
 either way.
 
-Only `--staged` prints an epilogue, because only `--staged` is a commit: the
-same findings from a CI run or a manual `fissile check src/` are not blocking
-anything a caller is about to bypass. It says the one thing the finding's own
-guidance cannot, since a project rewrites that guidance (§DF-003-severity-guidance.1)
-and it is the wrong voice regardless — `--no-verify` is reached for by a caller
-who has just decided the gate is in the way.
+Only `--staged` prints an epilogue, and it describes only that command's
+verdict. The same findings from a CI run or a manual `fissile check src/` do
+not gain staged semantics. Because `--staged` can be run manually or outside
+the actual commit hook, the generic epilogues make hook bypass conditional;
+the promoted-soft epilogue states exactly which hook invocation enforces its
+history-backed verdict. It says the one thing the finding's own guidance
+cannot, since a project rewrites that guidance (§DF-003-severity-guidance.1).
 
 ### 1.3 Stale exceptions
 
@@ -299,9 +316,11 @@ run, or the available history ends while the file is still over soft, fissile
 reports only the count it can establish with
 `soft_edit_history_complete = false` and keeps the finding advisory even when
 that visible count reaches the configured limit. Text adds `history incomplete;
-promotion disabled` to that file's edit clause. Plain `check`, `audit`, and the
-library checker are snapshot surfaces: they neither inspect history nor attach
-edit metadata, and a soft overflow on them does not block.
+promotion disabled` to that file's edit clause. Caller-passed paths, plain
+no-path `check`, `audit`, and the library checker are snapshot surfaces even
+when the working-tree bytes they measure equal the index bytes. They neither
+inspect nor spend history, attach no edit metadata, and do not promote a soft
+overflow.
 
 Size and exceptions take precedence over edit promotion. A true hard-size
 overflow reports only hard. If a hard exception exposes the soft tier under

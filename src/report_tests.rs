@@ -141,6 +141,36 @@ fn context_with(outcome: &Outcome, bump_step: u64, hard_limit: Option<u64>) -> F
     }
 }
 
+/// Every staged failure describes this command's verdict, while hook bypass is
+/// conditional unless the promoted-soft explanation has named the enforcing
+/// hook (§FS-004-check-audit.1.2).
+#[test]
+fn issue_74_staged_epilogues_name_the_command_verdict_and_condition_hook_bypass() {
+    let lead = "`fissile check --staged` rejected this staged snapshot.";
+    for epilogue in [
+        COMMIT_GATE,
+        COMMIT_GATE_PROMOTED,
+        COMMIT_GATE_STALE,
+        COMMIT_GATE_UNMEASURED,
+    ] {
+        assert!(epilogue.starts_with(lead), "wrong staged lead: {epilogue}");
+        assert!(!epilogue.contains("commit blocked by fissile"));
+    }
+
+    let promoted = COMMIT_GATE_PROMOTED.replace('\n', " ");
+    assert!(
+        promoted.contains("a hook that calls `fissile check <paths>` keeps soft findings advisory")
+    );
+    assert!(promoted.contains("Bypassing such a hook with `--no-verify`"));
+    for epilogue in [COMMIT_GATE, COMMIT_GATE_STALE, COMMIT_GATE_UNMEASURED] {
+        assert!(
+            epilogue
+                .replace('\n', " ")
+                .contains("If this command is the commit hook, bypassing it with `--no-verify`")
+        );
+    }
+}
+
 #[test]
 fn files_sharing_guidance_are_listed_under_one_copy_of_it() {
     let outcomes = [
