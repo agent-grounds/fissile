@@ -71,6 +71,26 @@ see AGENTS.md for what agents are told; the findings carry the rest.
 ```
 
 That is it. The installed hook runs `fissile check --staged` on every commit.
+That command checks index bytes and Git history: with the default bounded grace,
+the first four continuous over-soft edits warn and a history-proven fifth
+blocks. Explicit paths and plain `check` are working-tree snapshots, so their
+soft findings stay advisory even when they happen to contain the same bytes
+(§FS-004-check-audit.1.4).
+
+When a hook manager owns pre-commit instead, configure it to run the staged
+command without passing filenames. For [pre-commit](https://pre-commit.com),
+the local hook is (§FS-002-init.6):
+
+```yaml
+- repo: local
+  hooks:
+    - id: fissile
+      name: fissile
+      entry: fissile check --staged
+      language: system
+      pass_filenames: false
+```
+
 The starter config ships sensible defaults — a byte budget on everything, a
 line budget on common source extensions (`.rs`, `.go`, `.py`, `.ts`, `.js`, …)
 wherever they live, and a markdown budget — all editable in place.
@@ -79,8 +99,10 @@ wherever they live, and a markdown budget — all editable in place.
 
 Every rule carries two limits, because one threshold is a false economy:
 
-- **soft** — *warns, exit 0.* The signal for the agent that just grew the file:
-  shrink it the way the message says, before claiming the task done.
+- **soft** — *warns, exit 0* for the first four continuous staged edits with the
+  default grace. A history-proven fifth edit is promoted to blocking but remains
+  soft debt, so its remedy is still to split or record a soft exception
+  (§FS-004-check-audit.1.4).
 - **hard** — *blocks, exit 1.* No override flag, no `# fissile: allow` comment.
   The only way past is a justified exception (below).
 
@@ -418,8 +440,10 @@ from earlier version-1 configs.
 
 - **`init`** — config, exception registries, the managed `AGENTS.md` block, and
   the git hook (§FS-002-init).
-- **`check`** — the commit-time gate over staged files or explicit paths
-  (§FS-004-check-audit).
+- **`check --staged`** — the index-and-history commit gate, including bounded
+  soft-edit promotion (§FS-004-check-audit.1.4).
+- **`check [<paths>...]`** — working-tree snapshot checks; explicit paths and
+  the plain scan do not inspect or spend Git history (§FS-004-check-audit.1.4).
 - **`measure`** — what fissile counts for a file, and the headroom left
   (§FS-007-measure).
 - **`audit`** — the whole-repo inventory and migration surface
