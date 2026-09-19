@@ -326,35 +326,41 @@ fn line_basis(count_blank_lines: bool, count_comment_lines: bool) -> &'static st
 pub const MEASURE_HINT: &str =
     "hint: fissile measure <path>... reports size and headroom for the files you split into.";
 
-/// What `check --staged` says when a hard finding stands: the one context that
-/// is a commit, and the one place `--no-verify` is a live temptation
-/// (§FS-004-check-audit.1.2).
+/// What `check --staged` says when a hard finding stands. It describes this
+/// command's verdict and makes hook bypass conditional (§FS-004-check-audit.1.2).
 pub const COMMIT_GATE: &str = "\
-commit blocked by fissile. Split the file, or ask a human for a reviewed hard
-exception. Bypassing with --no-verify leaves the overflow for review or CI.";
+`fissile check --staged` rejected this staged snapshot. Split the file, or ask a
+human for a reviewed hard exception. If this command is the commit hook,
+bypassing it with `--no-verify` leaves the overflow for review or CI.";
 
 /// The commit epilogue for edit-promoted soft debt: the exception remains in
-/// the soft registry because promotion changes blocking, not severity.
+/// the soft registry because promotion changes blocking, not severity. It also
+/// distinguishes enforcing staged hooks from advisory snapshot hooks
+/// (§FS-004-check-audit.1.2).
 pub const COMMIT_GATE_PROMOTED: &str = "\
-commit blocked by fissile. Split the file now, or record the soft-limit debt
-now with `fissile exception add <path> --severity soft --rule <rule> --kind
-<kind>`. Bypassing with --no-verify leaves the overflow for review or CI.";
+`fissile check --staged` rejected this staged snapshot. Soft-edit promotion
+blocks a commit only when the hook runs that command; a hook that calls
+`fissile check <paths>` keeps soft findings advisory. Split now or record the
+debt with `fissile exception add <path> --severity soft --rule <rule> --kind
+<kind>`. Bypassing such a hook with `--no-verify` leaves the overflow for
+review or CI.";
 
 /// The same epilogue when a dead registry entry is the only thing blocking the
 /// commit: there is no file to split, and the fix is in the registry the block
 /// above names (§FS-004-check-audit.1.2, §FS-004-check-audit.1.3).
 pub const COMMIT_GATE_STALE: &str = "\
-commit blocked by fissile. Remove the exception entry above, or point it at the
-path its file moved to. Bypassing with --no-verify leaves a dead entry in the
-registry.";
+`fissile check --staged` rejected this staged snapshot. Remove the exception
+entry above, or point it at the path its file moved to. If this command is the
+commit hook, bypassing it with `--no-verify` leaves a dead entry in the registry.";
 
 /// The same epilogue when the commit is blocked by a staged file that could not
 /// be measured: nothing above accounts for it, so the exit code is all the
 /// caller would otherwise have (§FS-004-check-audit.1.2, §FS-004-check-audit.5).
 pub const COMMIT_GATE_UNMEASURED: &str = "\
-commit blocked by fissile. A staged file could not be measured, so nothing above
-accounts for it — fix the path the error names, or unstage it. Bypassing with
---no-verify commits a file fissile never checked.";
+`fissile check --staged` rejected this staged snapshot. A staged file could not
+be measured, so nothing above accounts for it — fix the path the error names,
+or unstage it. If this command is the commit hook, bypassing it with
+`--no-verify` commits a file fissile never checked.";
 
 /// The block naming entries that have outlived their file (§FS-004-check-audit.1.3).
 /// One block per registry, so a reader opens the file the line names.

@@ -32,6 +32,14 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+### Fixed
+
+- §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged
+  failures describe the `fissile check --staged` verdict instead of claiming an
+  unknown commit hook blocked a commit, explain that filename-passing snapshot
+  hooks keep soft findings advisory, and document how hook managers enforce
+  bounded soft-edit promotion. (PR #75)
+
 ## 2. [0.10.0] — 2026-09-14
 
 ### Changed

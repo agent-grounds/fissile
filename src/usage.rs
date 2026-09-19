@@ -43,9 +43,14 @@ examples:
   fissile init --exceptions
   fissile init . --agents-md --claude";
 
+/// Distinguishes history-backed staged checks from working-tree snapshots
+/// (§FS-004-check-audit.1.4).
 pub const CHECK_USAGE: &str = "\
 usage: fissile check [<paths>...] [--staged] [--config <path>]
                      [--format text|json] [--no-color]
+
+--staged checks index bytes and Git history; paths and plain check use working-tree
+snapshots.
 
 examples:
   fissile check --staged
