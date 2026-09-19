@@ -49,8 +49,8 @@ pub const CHECK_USAGE: &str = "\
 usage: fissile check [<paths>...] [--staged] [--config <path>]
                      [--format text|json] [--no-color]
 
---staged checks index bytes and Git history; paths and plain check use working-tree
-snapshots.
+--staged checks index bytes and Git history;
+paths and plain check use working-tree snapshots.
 
 examples:
   fissile check --staged

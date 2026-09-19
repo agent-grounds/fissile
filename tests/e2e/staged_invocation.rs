@@ -50,6 +50,7 @@ soft_message = "split-now"
 hard_message = "hard-stop"
 "#;
 
+#[cfg(unix)]
 const PROMOTED_EPILOGUE: &str = "\
 `fissile check --staged` rejected this staged snapshot. Soft-edit promotion
 blocks a commit only when the hook runs that command; a hook that calls
@@ -150,6 +151,7 @@ fn write_lines(root: &Path, relative: &str, count: usize) {
     fs::write(root.join(relative), content).unwrap();
 }
 
+#[cfg(unix)]
 fn append_edit(root: &Path, relative: &str, edit: usize) {
     let mut content = fs::read_to_string(root.join(relative)).unwrap();
     content.push_str(&format!("fn edit_{edit}() {{}}\n"));
@@ -185,6 +187,7 @@ fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+#[cfg(unix)]
 fn check(problems: &mut Vec<String>, condition: bool, message: impl Into<String>) {
     if !condition {
         problems.push(message.into());

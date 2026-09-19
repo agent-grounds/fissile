@@ -381,7 +381,7 @@ fn staged_soft_debt_counts_promotes_resets_and_keeps_its_precedence() {
         &[
             "soft (promoted): 1 file",
             "soft edits 5/5; promoted to blocking",
-            "record the soft-limit debt",
+            "record the\ndebt with `fissile exception add <path> --severity soft",
             "--severity soft",
         ],
     );
