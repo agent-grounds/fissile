@@ -8,5 +8,6 @@ hard: 1 file over the 4-line budget [rule: rust, message: m]
 
 hint: fissile measure <path>... reports size and headroom for the files you split into.
 
-commit blocked by fissile. Split the file, or ask a human for a reviewed hard
-exception. Bypassing with --no-verify leaves the overflow for review or CI."""
+`fissile check --staged` rejected this staged snapshot. Split the file, or ask a
+human for a reviewed hard exception. If this command is the commit hook,
+bypassing it with `--no-verify` leaves the overflow for review or CI."""

@@ -9,6 +9,6 @@ stale: 1 exception accepts a file that is not there [registry: docs/file-size-ag
   `fissile exception remove`, or point it at the path the file moved to.
     src/moved.rs [soft, rule: rust]
 
-commit blocked by fissile. Remove the exception entry above, or point it at the
-path its file moved to. Bypassing with --no-verify leaves a dead entry in the
-registry."""
+`fissile check --staged` rejected this staged snapshot. Remove the exception
+entry above, or point it at the path its file moved to. If this command is the
+commit hook, bypassing it with `--no-verify` leaves a dead entry in the registry."""
