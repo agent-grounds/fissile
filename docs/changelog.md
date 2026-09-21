@@ -32,6 +32,8 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+## 2. [0.10.1] — 2026-09-21
+
 ### Fixed
 
 - §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged
@@ -40,58 +42,9 @@ and at 0.x semver puts the minor number in charge of it.
   hooks keep soft findings advisory, and document how hook managers enforce
   bounded soft-edit promotion. (PR #75)
 
-## 2. [0.10.0] — 2026-09-14
-
-### Changed
-
-- The links to the sibling tools now name `agent-grounds`, which `grund` and
-  `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md`
-  pointers to `grund`, and the config-home decision's reference to `rhei`'s
-  matching issue. Changelog entries keep the old name, because they record where
-  the work happened at the time. (PR #71)
-
-### Changed
-
-- The repository moved from `vjovanov/fissile` to `agent-grounds/fissile`,
-  alongside the workspace it is maintained in. Every live link now names the new
-  owner: the crate's `repository` and `homepage`, the schema `$id`s, the README's
-  install and release links, and the managed `AGENTS.md` block that `fissile
-  init` writes into an adopting repository. The crate name on crates.io is
-  unchanged, so `cargo install fissile` and every pinned version keep working,
-  and GitHub redirects the old URLs. Changelog entries keep the old name,
-  because they record where the work happened at the time. Regenerate the
-  managed block with `fissile init` to pick up the new link. (PR #70)
-
-### Added
-
-- Debt direction and age in `audit`: `fissile audit --history <from>..<to>`
-  resolves an ancestral Git range and appends a final history section, in text
-  and in JSON, that says which way the exception debt moved rather than only
-  where it stands (§FS-004-check-audit.2). It reports exceptions added and
-  retired, ceilings raised and lowered, the age of every deferred entry, and the
-  age of each continuously unexceptioned soft finding, evaluating every
-  first-parent state with that revision's own config, registries, rules and
-  measurements. Identity follows §DF-005-exception-identity, so an
-  evidence-backed file or directory rename preserves an entry and its age
-  instead of reading as a retirement plus an addition, and age resets only after
-  a real absence. A malformed, non-ancestral, shallow or ambiguous history is
-  refused outright rather than reported in part. `check` and `audit` without the
-  option keep their existing execution paths and output. (PR #69)
-
-  Library callers are affected at source: `AuditOptions` gains a `history`
-  field and the audit section enum gains a variant, so exhaustive matches and
-  struct literals need updating. At 0.x this forces the minor number.
-
-### Changed
-
-- §FS-001-config.3, §FS-004-check-audit.1.4: soft findings now demand a
-  current-commit split or recorded-debt decision, and `check --staged` blocks a
-  history-proven continuous over-soft run at the rule's `soft_edit_limit`, while
-  incomplete history stays advisory. `fissile limits` reports the effective
-  allowance for every soft rule. (PR #68)
-
 ## 3. Older releases
 
+- [0.10.0](changelog/0.10.0.md) — 2026-09-14: - The links to the sibling tools now name `agent-grounds`, which `grund` and `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md` pointers to `grund`, and the config-home decision's reference to `rhei`'s matching issue.
 - [0.9.1](changelog/0.9.1.md) — 2026-09-07: - Report intake: `.github/ISSUE_TEMPLATE/` carries four GitHub issue forms — bug report, feature request, usability report, and token or time waste — each applying the matching kind label (`bug`, `enhancement`, `usability`, `tokens`) as the issue is opened, and `config.yml` turns blank issues off so no issue can arrive without a kind.
 - [0.9.0](changelog/0.9.0.md) — 2026-09-05: - §FS-004-check-audit.2: `fissile audit --only <section>[,<section>]` prints the named sections of the text report and nothing else, so tuning config or pruning the registry stops paying for a findings block the reader is not looking at.
 - [0.8.3](changelog/0.8.3.md) — 2026-09-05: - §FS-001-config.8, §FS-002-init.2: the config's home is `.agent-grounds/fissile.toml`.
