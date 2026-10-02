@@ -32,6 +32,14 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+### Added
+
+- `clean.sh` at the repository root gives back the disk a checkout's builds
+  took: it runs `cargo clean`, then removes every directory holding a valid
+  `CACHEDIR.TAG`, such as a plan's scratch build under `panta/`. It is the clean
+  verb `ephor clean` runs at the root of a branch checkout no live run holds.
+  (PR #82)
+
 ## 2. [0.10.1] — 2026-09-21
 
 ### Fixed
