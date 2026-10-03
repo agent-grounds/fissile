@@ -352,12 +352,15 @@ impl Registries {
         for entry in self.registry(severity) {
             if entry.max_unit == unit && entry.applies_to_rule(rule_id) && entry.matches_path(path)
             {
-                if matched.is_some() {
+                if let Some(first) = matched {
+                    // The first two matches in registry order are the entries to
+                    // edit, so the refusal names them (§FS-003-exceptions.3).
                     return Err(ExceptionError::MultipleMatches {
                         registry: entry.registry.clone(),
                         path: path.to_owned(),
                         rule: rule_id.to_owned(),
                         unit,
+                        patterns: Box::new([first.path.clone(), entry.path.clone()]),
                     });
                 }
                 matched = Some(entry);

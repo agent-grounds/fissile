@@ -257,3 +257,43 @@ fn one_file_move_does_not_rewrite_its_siblings() {
         "{text}"
     );
 }
+
+/// A collision met while replaying a revision keeps the range and revision in
+/// front of the refusal, and the refusal still names both entries to edit
+/// (§FS-003-exceptions.3, §FS-003-exceptions.4).
+#[test]
+fn historical_duplicate_match_names_both_entries() {
+    let repo = repo("duplicate-match", CONFIG);
+    write(&repo.root, "src/small.rs", "one\n");
+    let base = commit(&repo, "base", "2024-06-01T00:00:00Z");
+    write(&repo.root, "src/big.rs", "one\ntwo\n");
+    let entry = |path: &str| {
+        format!(
+            "[[exceptions]]\npath = \"{path}\"\nmatch = \"glob\"\nrules = [\"source\"]\n\
+             kind = \"structural\"\nmax_accepted = {{ value = 3, unit = \"lines\" }}\n\
+             until = \"indefinite\"\nreason = \"An entry that collides.\"\n"
+        )
+    };
+    write(
+        &repo.root,
+        "docs/file-size-agent-exceptions.toml",
+        &format!(
+            "fissile_exceptions_version = 2\n{}{}",
+            entry("src/**"),
+            entry("src/b*.rs")
+        ),
+    );
+    let to = commit(&repo, "collide", "2024-06-03T00:00:00Z");
+
+    let range = format!("{base}..{to}");
+    let output = fissile(&repo.root, &["audit", "--history", &range]);
+    let message = stderr(&output);
+    assert_eq!(code(&output), 2, "{message}");
+    assert!(stdout(&output).is_empty(), "{}", stdout(&output));
+    assert!(
+        message.contains(&format!(
+            "history {range}: revision {to}: docs/file-size-agent-exceptions.toml: more than one exception matches src/big.rs for lines rule source; matching entries include path = \"src/**\" and path = \"src/b*.rs\"; remove or narrow overlapping entries so only one covers this file, rule and unit in this registry"
+        )),
+        "{message}"
+    );
+}

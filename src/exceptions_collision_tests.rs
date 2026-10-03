@@ -92,3 +92,29 @@ fn the_refusal_holds_above_both_ceilings() {
     );
     assert!(message.ends_with(REMEDY), "{message}");
 }
+
+/// A library caller reads the two entries from the variant itself, not only from
+/// its wording (§FS-003-exceptions.3).
+#[test]
+fn the_variant_carries_both_patterns() {
+    let text = format!(
+        "fissile_exceptions_version = 2\n{}{}",
+        entry("src/**", "glob"),
+        entry("src/b*.rs", "glob")
+    );
+    let registries =
+        Registries::load(Some(RegistrySource::new(REGISTRY, &text)), None).expect("loads");
+    let error = registries
+        .verdict(Severity::Soft, "src/big.rs", "rust-source", Unit::Lines, 15)
+        .expect_err("two entries match");
+    assert_eq!(
+        error,
+        ExceptionError::MultipleMatches {
+            registry: REGISTRY.to_owned(),
+            path: "src/big.rs".to_owned(),
+            rule: "rust-source".to_owned(),
+            unit: Unit::Lines,
+            patterns: Box::new(["src/**".to_owned(), "src/b*.rs".to_owned()]),
+        }
+    );
+}
