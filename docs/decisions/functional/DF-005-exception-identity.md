@@ -71,7 +71,12 @@ entries, still a field a reader has to ask about, and still a line the next
 smaller total cost than a schema that permanently documents its own past.
 
 Migrating a registry is mechanical enough to publish as one command, which the
-release notes do (§FS-003-exceptions.2.2). The entries themselves do not change.
+release notes of the release that made this break did (§FS-003-exceptions.2.2).
+The entries themselves do not change. Release notes are now the list of merged
+pull requests (§AR-001-ci.8.3), so a later break carries its migration in the
+pull request that makes it: the title names the break, and the body holds the
+runnable upgrade steps under a **Migration** heading, which the notes reach
+through the link.
 
 ## 4. Rejected alternatives
 

@@ -90,6 +90,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: grund check
 
+      # The release-notes preparation (§AR-001-ci.8.3), against a fake `gh`.
+      - name: release tooling tests
+        if: matrix.os == 'ubuntu-latest'
+        run: python3 -m unittest discover -s tests/release -v
+
       - name: cargo package list
         if: matrix.os == 'ubuntu-latest'
         run: cargo package --locked --list

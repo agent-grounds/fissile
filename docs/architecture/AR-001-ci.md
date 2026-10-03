@@ -97,7 +97,9 @@ consumer can install (§GOAL-002-tiny-footprint.1):
   silently when the exact `fissile@<version>` already exists so a re-run after a
   partial failure is safe. The GitHub release uploads one archive plus a
   `.sha256` per target and takes its notes verbatim from the released section of
-  `docs/changelog.md` via `scripts/prepare_changelog_release.py`.
+  `docs/changelog.md` via `scripts/prepare_changelog_release.py`. That section is
+  written by the same script from the pull requests merged since the previous
+  release (§AR-001-ci.8.3); nobody writes release notes by hand.
 
 Two helper workflows prepare versions but never publish by themselves:
 `auto-bump.yml` (scheduled) proposes a patch bump when substantive commits have
@@ -114,12 +116,20 @@ release depends on is recorded here rather than in someone's memory:
 - **`CARGO_REGISTRY_TOKEN`** — a crates.io API token scoped to publish-update
   (and publish-new for the first release). `release.yml` fails fast when it is
   missing rather than after the build matrix.
-- **`RELEASE_PAT`** — a fine-grained GitHub token with *Contents: read+write*
-  and *Actions: read+write* on this repository. The bump workflows push the
-  version commit straight to `main` and dispatch `release.yml`; the default
-  `GITHUB_TOKEN` can do neither, because `main` requires pull requests and a
-  `GITHUB_TOKEN` push never triggers another workflow. It expires — a silently
-  failing Monday bump is the symptom.
+- **`RELEASE_PAT`** — a fine-grained GitHub token with *Contents: read+write*,
+  *Actions: read+write* and *Pull requests: read* on this repository. The bump
+  workflows push the version commit straight to `main` and dispatch
+  `release.yml`; the default `GITHUB_TOKEN` can do neither, because `main`
+  requires pull requests and a `GITHUB_TOKEN` push never triggers another
+  workflow. Both bump workflows also pass it to the preparation step as
+  `GH_TOKEN`, which reads the merged pull requests (§AR-001-ci.8.3), and declare
+  `pull-requests: read` among their permissions. It expires — a silently failing
+  Monday bump is the symptom.
+- **Full history and `gh`** — preparation lists the commits between the previous
+  tag and the candidate tip, so the bump workflows check out with
+  `fetch-depth: 0`, and it asks GitHub about them through the `gh` CLI the hosted
+  runners carry. Running `prepare` locally needs the same: a complete clone and a
+  `gh` that can read this repository's pull requests.
 - **Repository rulesets** — `main protection` (pull requests, linear history,
   the three `cargo test` matrix jobs as required checks) and `release tags`
   (`v*.*.*` cannot be deleted or force-moved). Both list the repository-admin
@@ -142,3 +152,87 @@ commits `X.Y.(Z+1)-dev`. The suffix is what makes `fissile --version` say which
 side of the tag a build came from. A `-dev` manifest is never publishable — the
 release path sets and verifies the clean version on its candidate branch — so
 the guarantee that a released version has a tag is unchanged.
+
+### 8.3 The release notes are the merged pull requests
+
+A release's notes list the pull requests merged into `main` since the previous
+release, each by its title. They are written by
+`scripts/prepare_changelog_release.py prepare <version>` with no hand-written
+input, because a step that waits on someone writing prose makes the automatic
+release of §AR-001-ci.8.1 a manual one.
+
+#### 8.3.1 The range
+
+Before it asks anything, preparation freezes `HEAD` as the candidate tip. The
+previous release is the highest tag of the exact form `vX.Y.Z`, compared as a
+semantic version, that the frozen tip can reach; tags of any other form
+(`v0.11.1-rc1`, `0.11.0`) and tags the tip cannot reach are not candidates. The
+tag's version must equal the release inline in `docs/changelog.md`. The range is
+`<tag>..<frozen tip>`: the tag's commit is out, the tip is in. Both bump
+workflows pick their current version by the same rule.
+
+#### 8.3.2 Acquisition is complete or it fails
+
+The commits of the range are listed locally. For each one, preparation asks
+GitHub's commit-to-pull-request endpoint which pull requests it belongs to,
+reading every page (`gh api --paginate --slurp`), and deduplicates the numbers.
+A pull request is listed only when all three hold:
+
+- it is merged;
+- its base is `main` of this repository;
+- its `merge_commit_sha` is a commit of the range.
+
+The third rule is what places a rebase merge: GitHub sets that SHA to the tip of
+the base branch the merge produced, so the original branch commits are never
+consulted, and a pull request merged after the frozen tip is left out. The
+repository is `GITHUB_REPOSITORY`, or the GitHub `origin` remote when run
+locally. Which files a pull request changed is never read.
+
+#### 8.3.3 Every merged pull request is listed
+
+There is no filter. A docs-only or CI-only pull request is listed like any
+other: the notes say what was merged, while whether a scheduled patch release
+happens at all is the separate question `auto-bump.yml`'s substantive-change gate
+answers from its own diff. A commit pushed straight to `main` without a pull
+request, such as a version commit, produces no line.
+
+#### 8.3.4 Order and format
+
+The list is ordered by `merged_at`, newest first; pull requests merged at the
+same instant are ordered by number, highest first. Each is one line:
+
+```markdown
+- [<title>](https://github.com/<owner>/<repo>/pull/<n>) (PR #<n>)
+```
+
+Markdown in a title is backslash-escaped, so the title shows as the literal text
+it is on GitHub. The list is the whole body of the release section.
+
+#### 8.3.5 The changelog keeps its shape, without a pending section
+
+`docs/changelog.md` has no `## Unreleased` section and no conventions for
+writing entries. Its top-level sections are `## 1. [<version>] — <date>`, the
+latest release inline, and `## 2. Older releases`. Preparation archives the
+previous inline release to `docs/changelog/<version>.md` exactly as before,
+relative links rewritten, links it at the top of the older releases with a
+one-line summary, and puts the new section in its place as `## 1.`. A summary is
+taken from an older prose body as before; for a generated list it is the first
+pull request's title. Existing archives and the archive links already listed are
+never rewritten, and `notes <version>` extracts the inline section unchanged.
+
+#### 8.3.6 Refusals
+
+Each of these exits 1 with an error that names it, and leaves
+`docs/changelog.md` and every archive byte-for-byte as they were:
+
+- no reachable `vX.Y.Z` tag, or one that differs from the inline release;
+- a shallow clone;
+- no merged pull request in the range;
+- an invalid version, date or changelog, or a release or archive that already
+  exists;
+- malformed data from GitHub;
+- an authentication or API failure, including any page that could not be read.
+
+Everything is read and validated before anything is written, and when writing
+fails part-way the archive already created is removed again, so a failed
+preparation never leaves a partial changelog behind.

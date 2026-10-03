@@ -3,3 +3,6 @@
 # Claude Code local state. `fissile init` regenerates .claude/CLAUDE.md
 # whenever this directory exists, duplicating the root CLAUDE.md.
 /.claude/
+
+# Left by running the Python release-tooling tests under tests/release/.
+__pycache__/
