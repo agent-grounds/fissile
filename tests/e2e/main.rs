@@ -14,6 +14,7 @@ use serde::Deserialize;
 // Unix-only: its fixture compares canonical paths, which Windows prefixes with `\\?\`.
 #[cfg(unix)]
 mod empty_scan;
+mod repository_root;
 mod soft_edit_limit;
 mod soft_edit_provenance;
 mod staged_invocation;
