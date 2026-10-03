@@ -187,6 +187,10 @@ acceptance is a separate decision rather than the shadow of the hard one.
 ## 3. Matching
 
 `match = "exact"` compares `path` to the repo-relative normalized path.
+An exact path names a file, so one that normalizes to the repository root
+(`.`, `./`, `src/..`, the root's absolute path) is refused by every command that
+takes an exact path — `exception add`, `exception retune` and `exception remove`
+— with a message that says it is the repository root, and nothing is written.
 `match = "glob"` uses the same glob engine as config rules. An exception applies
 only when the path matcher, the `rules` field, the registry severity, and
 `max_accepted` match the overflow. `max_accepted.unit` uses the matched rule's

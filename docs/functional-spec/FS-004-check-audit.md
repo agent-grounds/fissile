@@ -732,6 +732,14 @@ that names it:
 fissile check: cannot measure src/gone.rs: No such file or directory (os error 2)
 ```
 
+The repository root is a directory like any other. Every spelling of it — `.`,
+`./`, a path that climbs back to it such as `src/..`, or its absolute path — is
+named `.` and is a file-level failure on these terms, not an invalid path:
+
+```text
+fissile measure: cannot measure .: is a directory (pass files, or run fissile audit)
+```
+
 A run with file-level failures exits `2` even when no finding stands — silently
 passing an unmeasurable file would make the gate unsound — and the text success
 marker is withheld. JSON output never carries error records: stdout keeps the
