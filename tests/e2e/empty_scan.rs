@@ -109,7 +109,6 @@ fn stderr(output: &Output) -> String {
 /// The note names the empty selection, the directory and the repository root,
 /// and nothing about stdout or the exit status moves (§FS-004-check-audit.2.2).
 #[test]
-#[cfg(unix)]
 fn issue_77_audit_over_an_ignored_directory_says_it_measured_nothing() {
     let work = Work::new("ignored");
     let outer = work.0.join("outer");
@@ -161,7 +160,6 @@ fn issue_77_audit_over_an_ignored_directory_says_it_measured_nothing() {
 /// The control: the same files in a repository that selects them print the
 /// ranking and no note (§FS-004-check-audit.2.2).
 #[test]
-#[cfg(unix)]
 fn issue_77_audit_over_a_selected_tree_prints_no_empty_scan_note() {
     let work = Work::new("selected");
     let plain = work.0.join("plain");
