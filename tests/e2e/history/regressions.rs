@@ -284,6 +284,12 @@ fn historical_duplicate_match_names_both_entries() {
         ),
     );
     let to = commit(&repo, "collide", "2024-06-03T00:00:00Z");
+    // Uncommitted: the working-tree audit passes, so only the replay meets the collision.
+    write(
+        &repo.root,
+        "docs/file-size-agent-exceptions.toml",
+        &format!("fissile_exceptions_version = 2\n{}", entry("src/**")),
+    );
 
     let range = format!("{base}..{to}");
     let output = fissile(&repo.root, &["audit", "--history", &range]);
