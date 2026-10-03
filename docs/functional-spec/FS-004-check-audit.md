@@ -654,6 +654,36 @@ options.
 exit `0`. Stale exceptions follow `[exceptions].stale`: `warn`, `error`, or
 `ignore`.
 
+### 2.2 A scan that selected no files says so
+
+When the scan scope selects no files at all, `audit` writes one note on stderr
+saying so, in every format and under any `--only` selection:
+
+```text
+fissile audit: the scan selected no files in /work/outer/proj, inside the git repository at /work/outer; nothing was measured
+```
+
+The note names the directory audit resolved its scope against and, when that
+directory sits inside a git repository, that repository's root, both as
+absolute paths. The root is there because the usual way to land here is a
+directory the enclosing repository ignores, so every file is filtered out
+(§FS-001-config.2) without anything in the directory looking wrong. Outside a
+git repository the note ends at the directory.
+
+Stdout does not change. A passing text run still prints exactly the success
+marker (§GOAL-003-friendly-output.1), `--only top` still prints nothing, the
+JSON document keeps its shape, and the exit status is computed exactly as
+before. This is a note, like a deprecated config home (§FS-001-config.8.2): it
+is said and never charged, and a scan that selected at least one file never
+prints it.
+
+This is not the `--only` rule that lets one section print nothing (§FS-004-check-audit.2). An
+empty section is a fact about that section, and a reader can check it against
+the registry or the rules. An empty scan empties every section at once, so
+nothing is left in the output to tell "every file is within budget" from
+"no file was measured". The note costs one line and only in that case, so it
+fits §GOAL-004-token-thrift.1.
+
 ## 3. Default Large-File Guard
 
 The built-in config includes a simple byte-size guard over all non-excluded
