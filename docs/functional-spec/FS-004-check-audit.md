@@ -302,7 +302,25 @@ soft exception. It never uses the hard-size heading, guidance, exception route,
 or provenance.
 
 From the first staged soft finding, its text detail says `soft edits
-<count>/<limit>`. JSON carries `soft_edit_count`, `soft_edit_limit`, and
+<count>/<limit>`, retaining `; promoted to blocking` when promoted. With
+complete history, append `; <count - 1> prior committed over-soft edits + 1
+staged edit`. This describes the established count under the effective rule,
+not who authored the commits or whether a hook ran on them. Append the following
+boundary explanations when applicable:
+
+- Count `1`: `; this staged edit starts the over-soft run`.
+- Count equals the edit limit: `; this staged edit first reaches the promotion
+  limit`.
+- Count exceeds the edit limit: `; prior committed edits already reached the
+  promotion limit`.
+
+At an edit limit of `1`, both the start-of-run and first-promotion explanations
+apply, in that order. Thus `9/5` explains eight prior committed edits and a
+previously reached limit; `5/5` explains four prior committed edits and the
+staged edit reaching it; `1/5` explains zero prior committed edits and the
+staged edit starting the run without promotion.
+
+JSON carries `soft_edit_count`, `soft_edit_limit`, and
 `soft_edit_history_complete`; only a blocking promotion carries
 `"promotion":"soft_edit_limit"`. Files with different counts or limits may
 remain in one guidance block because these values are per-file details.
@@ -316,7 +334,11 @@ run, or the available history ends while the file is still over soft, fissile
 reports only the count it can establish with
 `soft_edit_history_complete = false` and keeps the finding advisory even when
 that visible count reaches the configured limit. Text adds `history incomplete;
-promotion disabled` to that file's edit clause. Caller-passed paths, plain
+promotion disabled` to that file's edit clause, then appends `; at least
+<count - 1> prior committed over-soft edits established + 1 staged edit`.
+This partial evidence never claims a proved start of the run, a first promotion,
+or a previously reached promotion limit, even when the visible count is `1` or
+reaches the edit limit. Caller-passed paths, plain
 no-path `check`, `audit`, and the library checker are snapshot surfaces even
 when the working-tree bytes they measure equal the index bytes. They neither
 inspect nor spend history, attach no edit metadata, and do not promote a soft
