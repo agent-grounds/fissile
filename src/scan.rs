@@ -214,6 +214,25 @@ fn clean_relative_path(path: &Path) -> Option<String> {
     }
 }
 
+/// The root of the git work tree `dir` sits in, as git resolves it (absolute,
+/// symlinks followed), or `None` outside one or when git cannot answer. Read
+/// only to name where an empty scan looked (§FS-004-check-audit.2.2).
+pub fn git_toplevel(dir: &Path) -> Option<PathBuf> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let top = String::from_utf8_lossy(&output.stdout)
+        .trim_end()
+        .to_owned();
+    (!top.is_empty()).then(|| PathBuf::from(top))
+}
+
 /// The git-staged file set for `check --staged` (§FS-004-check-audit.1). Deleted
 /// paths are dropped: there is nothing left to measure. Returns the paths with
 /// `[scan].exclude` applied.
