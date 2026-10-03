@@ -2,7 +2,7 @@
 //! migration surface. Beyond current overflows it can report the largest files
 //! per unit, stale exceptions, and rule coverage gaps.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::cli::{self, CommandError, Format, Loaded};
 use crate::exceptions::{EntrySite, Exception, KindCounts, KindPathCounts};
@@ -197,6 +197,7 @@ pub fn run(options: &AuditOptions) -> Result<Run, CommandError> {
         ));
     }
     let files = scan::walk_scope(&loaded.root, &loaded.config.scan)?;
+    let scanned_nothing = files.is_empty();
 
     let mut measured_files = Vec::with_capacity(files.len());
     let mut errors = Vec::new();
@@ -311,12 +312,35 @@ pub fn run(options: &AuditOptions) -> Result<Run, CommandError> {
         }
         Format::Json => render_json(&outcomes, &contexts, &inventory, history.as_ref()),
     };
+    let mut notes = cli::config_notes(&loaded.source);
+    if scanned_nothing {
+        notes.push(empty_scan_note(&loaded.root));
+    }
     Ok(Run {
         output,
         failed,
-        notes: cli::config_notes(&loaded.source),
+        notes,
         errors,
     })
+}
+
+/// The one stderr line an audit whose scope selected no files owes: where it
+/// looked and, inside a git repository, which repository's root filtered it, so
+/// an unread tree never reads as a clean one (§FS-004-check-audit.2.2).
+fn empty_scan_note(root: &Path) -> String {
+    let dir = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let mut note = format!(
+        "fissile audit: the scan selected no files in {}",
+        dir.display()
+    );
+    // Outside a git repository the note ends at the directory.
+    if let Some(top) = scan::git_toplevel(&dir) {
+        note.push_str(&format!(
+            ", inside the git repository at {}; nothing was measured",
+            top.display()
+        ));
+    }
+    note
 }
 
 /// The largest `n` measured files per unit (§FS-004-check-audit.2). A rule's own
