@@ -621,20 +621,30 @@ fn soft_edit_for<'a>(soft_edits: &'a [SoftEdit], overflow: &Overflow) -> Option<
     })
 }
 
+/// Explain staged versus committed edits and proved boundaries (§FS-004-check-audit.1.4).
 fn soft_edit_clause(edit: &SoftEdit) -> String {
+    let mut clause = format!("soft edits {}/{}", edit.count, edit.limit);
     if edit.promoted() {
-        format!(
-            "soft edits {}/{}; promoted to blocking",
-            edit.count, edit.limit
-        )
-    } else if edit.history_complete {
-        format!("soft edits {}/{}", edit.count, edit.limit)
-    } else {
-        format!(
-            "soft edits {}/{}; history incomplete; promotion disabled",
-            edit.count, edit.limit
-        )
+        clause.push_str("; promoted to blocking");
     }
+    let prior_edits = edit.count - 1;
+    if !edit.history_complete {
+        return format!(
+            "{clause}; history incomplete; promotion disabled; at least {prior_edits} prior committed over-soft edits established + 1 staged edit"
+        );
+    }
+    clause.push_str(&format!(
+        "; {prior_edits} prior committed over-soft edits + 1 staged edit"
+    ));
+    if edit.count == 1 {
+        clause.push_str("; this staged edit starts the over-soft run");
+    }
+    if edit.count == edit.limit {
+        clause.push_str("; this staged edit first reaches the promotion limit");
+    } else if edit.count > edit.limit {
+        clause.push_str("; prior committed edits already reached the promotion limit");
+    }
+    clause
 }
 
 pub(crate) fn has_soft_edit_promotion(soft_edits: &[SoftEdit]) -> bool {
