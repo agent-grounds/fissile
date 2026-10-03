@@ -56,10 +56,7 @@ pub fn run(options: &RemoveOptions) -> Result<Run, CommandError> {
             (loaded, entries)
         }
     };
-    let path = match options.match_kind {
-        MatchKind::Exact => scan::normalize_repo_path(&loaded.root, &options.path)?,
-        MatchKind::Glob => options.path.replace('\\', "/"),
-    };
+    let path = entry::match_path(&loaded, options.match_kind, &options.path)?;
 
     entry::validate_match(options.match_kind, &path)?;
     let rules = entry::resolve_rules(&loaded, &options.rules)?;

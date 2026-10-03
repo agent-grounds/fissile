@@ -285,6 +285,28 @@ pub fn validate_match(match_kind: MatchKind, path: &str) -> Result<(), CommandEr
     }
 }
 
+/// The `<path>` an exception command records: an exact path in the
+/// repo-relative form rules match, refused when it names the repository root,
+/// which is no file (§FS-003-exceptions.3); a glob as written.
+pub fn match_path(
+    loaded: &Loaded,
+    match_kind: MatchKind,
+    raw: &str,
+) -> Result<String, CommandError> {
+    match match_kind {
+        MatchKind::Exact => {
+            let path = scan::normalize_repo_path(&loaded.root, raw)?;
+            if path == scan::REPOSITORY_ROOT {
+                return Err(CommandError::Usage(format!(
+                    "path `{raw}` is the repository root, not a file"
+                )));
+            }
+            Ok(path)
+        }
+        MatchKind::Glob => Ok(raw.replace('\\', "/")),
+    }
+}
+
 /// Resolve `--rule` ids against the effective config. Every selected rule must
 /// share one unit, since the entry records exactly one (§FS-003-exceptions.2).
 pub fn resolve_rules<'a>(
