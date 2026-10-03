@@ -10,7 +10,7 @@ use crate::entry::{self, Address, Sizing};
 use crate::exception::shell_quote;
 use crate::exceptions::{Exception, MatchKind};
 use crate::toml_lines;
-use crate::{Severity, Unit, scan};
+use crate::{Severity, Unit};
 
 /// Inputs to `exception retune`.
 #[derive(Clone, Debug)]
@@ -36,10 +36,7 @@ pub struct Run {
 
 pub fn run(options: &RetuneOptions) -> Result<Run, CommandError> {
     let loaded = cli::load(&options.root, options.config_path.as_deref())?;
-    let path = match options.match_kind {
-        MatchKind::Exact => scan::normalize_repo_path(&loaded.root, &options.path)?,
-        MatchKind::Glob => options.path.replace('\\', "/"),
-    };
+    let path = entry::match_path(&loaded, options.match_kind, &options.path)?;
 
     entry::validate_match(options.match_kind, &path)?;
     let rules = entry::resolve_rules(&loaded, &options.rules)?;

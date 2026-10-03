@@ -160,8 +160,14 @@ fn relative(root: &Path, path: &Path) -> Option<String> {
     Some(rel.to_string_lossy().replace('\\', "/"))
 }
 
+/// The one spelling of the repository root, however a caller wrote it: `.`,
+/// `./`, `src/..` or its absolute path (§FS-004-check-audit.5).
+pub const REPOSITORY_ROOT: &str = ".";
+
 /// Normalize an explicit file path to the repo-relative `/` form used by rules
-/// and exact exceptions (§FS-003-exceptions.3, §FS-004-check-audit.1).
+/// and exact exceptions (§FS-003-exceptions.3, §FS-004-check-audit.1). The root
+/// becomes [`REPOSITORY_ROOT`], a directory the caller reads or refuses like any
+/// other rather than an invalid or empty path (§FS-004-check-audit.5).
 pub fn normalize_repo_path(root: &Path, raw: &str) -> io::Result<String> {
     let raw = raw.replace('\\', "/");
     let path = Path::new(&raw);
@@ -179,7 +185,7 @@ pub fn normalize_repo_path(root: &Path, raw: &str) -> io::Result<String> {
         .canonicalize()
         // Name the argument: the caller may have passed several (§FS-004-check-audit.5).
         .map_err(|error| io::Error::new(error.kind(), format!("{raw}: {error}")))?;
-        return relative(&root, &full).ok_or_else(|| {
+        return relative(&root, &full).map(root_as_dot).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("path `{raw}` is outside the repository"),
@@ -187,12 +193,21 @@ pub fn normalize_repo_path(root: &Path, raw: &str) -> io::Result<String> {
         });
     }
 
-    clean_relative_path(path).ok_or_else(|| {
+    clean_relative_path(path).map(root_as_dot).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("path `{raw}` is not a repo-relative file path"),
         )
     })
+}
+
+/// An empty repo-relative path is the root itself (§FS-004-check-audit.5).
+fn root_as_dot(rel: String) -> String {
+    if rel.is_empty() {
+        REPOSITORY_ROOT.to_owned()
+    } else {
+        rel
+    }
 }
 
 fn clean_relative_path(path: &Path) -> Option<String> {
@@ -207,11 +222,7 @@ fn clean_relative_path(path: &Path) -> Option<String> {
             Component::Prefix(_) | Component::RootDir => return None,
         }
     }
-    if out.as_os_str().is_empty() {
-        None
-    } else {
-        Some(out.to_string_lossy().replace('\\', "/"))
-    }
+    Some(out.to_string_lossy().replace('\\', "/"))
 }
 
 /// The root of the git work tree `dir` sits in, as git resolves it (absolute,
