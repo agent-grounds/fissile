@@ -12,6 +12,7 @@ use std::process::Command;
 use serde::Deserialize;
 
 mod soft_edit_limit;
+mod soft_edit_provenance;
 mod staged_invocation;
 
 /// One scenario manifest (`case.toml`). Unknown keys are rejected: a misspelled
