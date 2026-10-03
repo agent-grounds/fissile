@@ -388,6 +388,24 @@ warning names work nobody may do and no amount of work can clear it. One entry
 makes a file over the hard limit quiet — no second entry in the soft registry
 repeating the same rationale (§FS-003-exceptions.3).
 
+### Overlapping entries
+
+One overflow at one severity takes one rationale, so two entries in the same
+registry that both cover a file, rule and unit are a registry defect, not a
+choice between them. The refusal names the measured file where the overlap was
+met, then the two entries to edit — the first two that match, in registry order
+(§FS-003-exceptions.3):
+
+```text
+$ fissile check
+fissile check: docs/soft-exceptions.toml: more than one exception matches src/big.rs for lines rule rust-source; matching entries include path = "src/**" and path = "src/b*.rs"; remove or narrow overlapping entries so only one covers this file, rule and unit in this registry
+```
+
+Search the registry for those `path` values rather than for the measured file:
+a glob entry never spells it. Delete whichever entry is redundant, or narrow one
+of the patterns so it no longer reaches the file, and run the command again — a
+third overlapping entry is reported once the first pair is resolved.
+
 ## Use as a library
 
 ```rust
@@ -407,6 +425,12 @@ let file = measure_text("src/lib.rs", "fn main() {}\n");
 assert!(checker.check(&file)?.is_empty());
 # Ok::<(), fissile::FissileError>(())
 ```
+
+A registry defect is returned as an `ExceptionError` whose `Display` is the
+message the CLI prints. `ExceptionError::MultipleMatches` carries the colliding
+entries' `path` values as `patterns: Box<[String; 2]>` beside the measured `path`
+(§FS-003-exceptions.4). That field arrived in 0.11: code that builds the variant
+or destructures it without `..` has to name it.
 
 ## Configuration
 

@@ -83,11 +83,17 @@ pub enum ExceptionError {
         max: u64,
         limit: u64,
     },
+    /// More than one entry in one severity registry matches the same overflow
+    /// (§FS-003-exceptions.3). `path` is the measured file; `patterns` holds the
+    /// `path` values of the first two matching entries in registry order, the
+    /// entries the reader has to edit (§FS-003-exceptions.4). Boxed so the pair
+    /// does not grow every `Result` that carries this error.
     MultipleMatches {
         registry: String,
         path: String,
         rule: String,
         unit: Unit,
+        patterns: Box<[String; 2]>,
     },
     ShadowsInHardRegistry {
         site: EntrySite,
@@ -221,15 +227,37 @@ impl fmt::Display for ExceptionError {
                 f,
                 "{site} max_accepted.value {max} is below rule {rule} limit {limit}"
             ),
+            // The file says where the collision was met, the patterns what to edit,
+            // and the remedy closes it (§DF-007-instructions-at-the-error-site.1).
             ExceptionError::MultipleMatches {
                 registry,
                 path,
                 rule,
                 unit,
-            } => write!(
-                f,
-                "{registry}: more than one exception matches {path} for {unit} rule {rule}"
-            ),
+                patterns,
+            } => {
+                // Equal patterns tell the entries apart from nothing, so they are
+                // named once, as `ShadowsAmbiguousTwin` does (§FS-003-exceptions.4).
+                let [first, second] = &**patterns;
+                write!(
+                    f,
+                    "{registry}: more than one exception matches {path} for {unit} rule {rule}; "
+                )?;
+                if first == second {
+                    write!(
+                        f,
+                        "at least two matching entries declare path = \"{first}\"; "
+                    )?;
+                } else {
+                    write!(
+                        f,
+                        "matching entries include path = \"{first}\" and path = \"{second}\"; "
+                    )?;
+                }
+                f.write_str(
+                    "remove or narrow overlapping entries so only one covers this file, rule and unit in this registry",
+                )
+            }
             // Each shadow error names the two ways out, because dropping the
             // pointer is as often the right one as fixing what it points at
             // (§DF-007-instructions-at-the-error-site).
