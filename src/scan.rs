@@ -402,7 +402,7 @@ pub(crate) fn measure_file_with_context(
     rel: &str,
     tokens: &Tokens,
 ) -> io::Result<MeasuredFile> {
-    let bytes = fs::read(root.join(rel))?;
+    let bytes = read_file(&root.join(rel))?;
     let mut measured = measure_content(rel, &bytes);
     if tokens.enabled
         && let Some(count) = run_token_command(root, &tokens.command, rel)?
@@ -410,6 +410,19 @@ pub(crate) fn measure_file_with_context(
         measured.measurement = measured.measurement.with_tokens(count);
     }
     Ok(measured)
+}
+
+/// Read a working-tree file, naming a directory as `IsADirectory` on every
+/// platform: Windows reports opening one as access denied, which would hide the
+/// directory hint of §FS-004-check-audit.5.
+fn read_file(path: &Path) -> io::Result<Vec<u8>> {
+    fs::read(path).map_err(|error| {
+        if error.kind() != io::ErrorKind::IsADirectory && path.is_dir() {
+            io::Error::from(io::ErrorKind::IsADirectory)
+        } else {
+            error
+        }
+    })
 }
 
 /// Measure a staged blob for `check --staged` (§FS-004-check-audit.1).
