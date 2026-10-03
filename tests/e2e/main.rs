@@ -11,6 +11,8 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+// Unix-only: its fixture compares canonical paths, which Windows prefixes with `\\?\`.
+#[cfg(unix)]
 mod empty_scan;
 mod soft_edit_limit;
 mod soft_edit_provenance;
