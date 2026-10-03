@@ -1,0 +1,22 @@
+fissile_exceptions_version = 2
+
+# Two entries, both matching src/big.rs for the same rule and unit, and neither
+# spelling that path literally: a grep for the measured file finds neither. The
+# refusal has to name them (§FS-003-exceptions.3).
+[[exceptions]]
+path = "src/**"
+match = "glob"
+rules = ["rust-source"]
+kind = "structural"
+max_accepted = { value = 100, unit = "lines" }
+until = "indefinite"
+reason = "The first of the two entries that collide."
+
+[[exceptions]]
+path = "src/b*.rs"
+match = "glob"
+rules = ["rust-source"]
+kind = "structural"
+max_accepted = { value = 100, unit = "lines" }
+until = "indefinite"
+reason = "The second of the two entries that collide."

@@ -1,0 +1,31 @@
+fissile_config_version = 1
+
+[scan]
+include = ["src"]
+exclude = []
+respect_gitignore = false
+
+[output]
+format = "text"
+color = "never"
+success = "ok"
+
+[exceptions]
+soft_registry = "docs/soft-exceptions.toml"
+hard_registry = "docs/hard-exceptions.toml"
+stale = "ignore"
+
+[[rules]]
+id = "rust-source"
+include = ["src/**/*.rs"]
+exclude = []
+unit = "lines"
+soft = 10
+hard = 20
+count_blank_lines = false
+count_comment_lines = true
+message = "split"
+
+[[messages]]
+id = "split"
+text = "Split the file."

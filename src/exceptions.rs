@@ -630,3 +630,7 @@ pub(crate) use removal::RemovalEntry;
 #[cfg(test)]
 #[path = "exceptions_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "exceptions_collision_tests.rs"]
+mod collision_tests;

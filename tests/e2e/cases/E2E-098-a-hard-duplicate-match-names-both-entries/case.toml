@@ -1,0 +1,9 @@
+# The hard registry refuses in the same words as the soft one.
+args = ["check"]
+exit = 2
+stdout_equals = ""
+stderr_contains = [
+  "fissile check: docs/hard-exceptions.toml: more than one exception matches src/big.rs for lines rule rust-source",
+  "matching entries include path = \"src/**\" and path = \"src/b*.rs\"",
+  "remove or narrow overlapping entries so only one covers this file, rule and unit in this registry",
+]
