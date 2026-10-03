@@ -11,6 +11,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+mod empty_scan;
 mod soft_edit_limit;
 mod soft_edit_provenance;
 mod staged_invocation;
