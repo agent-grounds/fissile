@@ -1,0 +1,11 @@
+# The pre-commit hook meets the same refusal when the file is staged, and the
+# reader there has the least context, so it carries the same two entries.
+args = ["check", "--staged"]
+exit = 2
+git = true
+stdout_equals = ""
+stderr_contains = [
+  "fissile check: docs/soft-exceptions.toml: more than one exception matches src/big.rs for lines rule rust-source",
+  "matching entries include path = \"src/**\" and path = \"src/b*.rs\"",
+  "remove or narrow overlapping entries so only one covers this file, rule and unit in this registry",
+]

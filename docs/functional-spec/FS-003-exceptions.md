@@ -230,6 +230,27 @@ overflow, `fissile` reports a schema error. One accepted oversized condition at
 one severity should have one rationale. A single exception entry may list
 multiple rules only when all listed rules use the same unit.
 
+The refusal names the entries that collide, not only the file they collide on:
+the measured path says which overflow is ambiguous, but what has to be edited is
+an entry, and a glob entry need not spell that path at all. It names the `path`
+of the first two matching entries in registry order, so the same registry gives
+the same message on every run:
+
+```text
+docs/soft-exceptions.toml: more than one exception matches src/big.rs for lines rule rust-source; matching entries include path = "src/**" and path = "src/b*.rs"; remove or narrow overlapping entries so only one covers this file, rule and unit in this registry
+```
+
+Two names are enough to act on and stay bounded: with three or more matching
+entries the message still names two, and says "include" so it does not claim
+they are all. When both entries declare the same `path` the two names would read
+as one, so the message says "at least two matching entries declare
+path = ..." instead, naming it once — equal paths do not make the entries equal,
+since they may differ in `match` or `rules`. The refusal is the same whatever the
+measurement: a file above either entry's `max_accepted` is as ambiguous as one
+below it, because which ceiling applies is the question one rationale answers.
+The hard registry is refused in the same words; a soft and a hard entry for the
+same overflow are two severities, not a collision.
+
 ## 4. Validation
 
 `fissile` validates both registries before evaluating overflows:
@@ -263,6 +284,14 @@ docs/file-size-human-exceptions.toml: src/orders.rs states no reason
 
 The registry file is part of the identifier: the same path may appear in both
 registries, making two different claims at two different severities.
+
+A diagnostic about more than one entry keeps the measured file and the candidate
+entries apart, because they are different things to the reader: the file is
+where the condition arose, the entries are what to edit. It names each candidate
+as `path = "<pattern>"`, the line as it appears in the registry, and ends with
+the edit that restores one rationale — remove or narrow the overlapping entries
+(§FS-003-exceptions.3) — rather than leaving the reader to infer it
+(§DF-007-instructions-at-the-error-site.1).
 
 The validator never requires the target file to exist: an entry is well-formed
 whether or not the path it names is on disk today, so a file a build has not

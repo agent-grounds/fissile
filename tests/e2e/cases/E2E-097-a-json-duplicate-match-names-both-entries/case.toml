@@ -1,0 +1,10 @@
+# A schema error aborts the findings, so stdout carries no findings JSON; the
+# diagnostic, both entries included, is on stderr.
+args = ["check", "--format", "json"]
+exit = 2
+stdout_equals = ""
+stderr_contains = [
+  "docs/soft-exceptions.toml: more than one exception matches src/big.rs for lines rule rust-source",
+  "matching entries include path = \"src/**\" and path = \"src/b*.rs\"",
+  "remove or narrow overlapping entries so only one covers this file, rule and unit in this registry",
+]

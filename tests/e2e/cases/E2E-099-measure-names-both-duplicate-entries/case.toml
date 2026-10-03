@@ -1,0 +1,10 @@
+# measure looks the accepted ceiling up through the same verdict, so it inherits
+# the diagnostic and keeps its own command prefix.
+args = ["measure", "src/big.rs"]
+exit = 2
+stdout_equals = ""
+stderr_contains = [
+  "fissile measure: docs/soft-exceptions.toml: more than one exception matches src/big.rs for lines rule rust-source",
+  "matching entries include path = \"src/**\" and path = \"src/b*.rs\"",
+  "remove or narrow overlapping entries so only one covers this file, rule and unit in this registry",
+]

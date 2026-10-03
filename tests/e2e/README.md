@@ -124,3 +124,8 @@ and all-or-nothing refusals through the real binary
 - `E2E-092-audit-only-is-a-text-flag` — the selector stops where the JSON contract starts.
 - `E2E-093-audit-only-findings-is-the-gate-output` — asked for findings, audit gives the gate's answer.
 - `E2E-094-audit-only-refuses-a-json-config` — a config's JSON format refuses the selector too.
+- `E2E-095-a-duplicate-match-names-both-entries` — a duplicate match names both entries and the edit, not just the file.
+- `E2E-096-a-staged-duplicate-match-names-both-entries` — the hook's staged run names the same two entries.
+- `E2E-097-a-json-duplicate-match-names-both-entries` — a JSON run refuses on stderr with both entries and no findings.
+- `E2E-098-a-hard-duplicate-match-names-both-entries` — the hard registry refuses in the same words.
+- `E2E-099-measure-names-both-duplicate-entries` — measure inherits the diagnostic under its own prefix.
