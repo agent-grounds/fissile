@@ -32,6 +32,8 @@ and at 0.x semver puts the minor number in charge of it.
 
 ## Unreleased
 
+## 2. [0.11.0] — 2026-10-03
+
 ### Added
 
 - `clean.sh` at the repository root gives back the disk a checkout's builds
@@ -71,18 +73,9 @@ and at 0.x semver puts the minor number in charge of it.
   path that names the repository root and leave the registry untouched.
   (PR #85)
 
-## 2. [0.10.1] — 2026-09-21
-
-### Fixed
-
-- §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged
-  failures describe the `fissile check --staged` verdict instead of claiming an
-  unknown commit hook blocked a commit, explain that filename-passing snapshot
-  hooks keep soft findings advisory, and document how hook managers enforce
-  bounded soft-edit promotion. (PR #75)
-
 ## 3. Older releases
 
+- [0.10.1](changelog/0.10.1.md) — 2026-09-21: - §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged failures describe the `fissile check --staged` verdict instead of claiming an unknown commit hook blocked a commit, explain that filename-passing snapshot hooks keep soft findings advisory, and document how hook managers enforce bounded soft-edit promotion.
 - [0.10.0](changelog/0.10.0.md) — 2026-09-14: - The links to the sibling tools now name `agent-grounds`, which `grund` and `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md` pointers to `grund`, and the config-home decision's reference to `rhei`'s matching issue.
 - [0.9.1](changelog/0.9.1.md) — 2026-09-07: - Report intake: `.github/ISSUE_TEMPLATE/` carries four GitHub issue forms — bug report, feature request, usability report, and token or time waste — each applying the matching kind label (`bug`, `enhancement`, `usability`, `tokens`) as the issue is opened, and `config.yml` turns blank issues off so no issue can arrive without a kind.
 - [0.9.0](changelog/0.9.0.md) — 2026-09-05: - §FS-004-check-audit.2: `fissile audit --only <section>[,<section>]` prints the named sections of the text report and nothing else, so tuning config or pruning the registry stops paying for a findings block the reader is not looking at.
