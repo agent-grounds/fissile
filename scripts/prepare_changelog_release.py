@@ -58,8 +58,6 @@ def prepare_release(changelog: Path, version: str, release_date: str) -> None:
         raise ChangelogError(f"docs/changelog.md already has {version} as the inline latest release")
 
     archive_dir = changelog.parent / "changelog"
-    if (archive_dir / f"{version}.md").exists():
-        raise ChangelogError(f"release {version} already exists as an archive: {archive_dir / f'{version}.md'}")
     archive_path = archive_dir / f"{previous_version}.md"
     if archive_path.exists():
         raise ChangelogError(f"archive already exists: {archive_path}")
