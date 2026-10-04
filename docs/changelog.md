@@ -1,38 +1,18 @@
 # Changelog
 
-Records every notable change to `fissile`. Versions follow semver; the
-**latest release is inline** in this file, and **older releases live
-one-per-file under `docs/changelog/`** so a reader — human or agent — only
-loads the history they ask for (§GOAL-004-token-thrift). Each entry cites the
-FS/AR/GOAL/DA IDs it touches, so the changelog is part of the grounded tree.
+Records every release of `fissile`. Versions follow semver; the **latest
+release is inline** in this file, and **older releases live one-per-file under
+`docs/changelog/`** so a reader — human or agent — only loads the history they
+ask for (§GOAL-004-token-thrift).
 
-Schema-version bumps are called out explicitly: `fissile_config_version`
-(§FS-001-config.1), the exception registry version (§FS-003-exceptions.1), and
-the managed block versions written by `init` (§FS-002-init.4). A bump to any of
-these is a breaking change for the consumer and must appear under **Changed**
-with a migration note. A change that breaks a library caller's source is called
-out the same way and names the release it forces: the crate publishes a `[lib]`,
-and at 0.x semver puts the minor number in charge of it.
+A release's notes are the pull requests merged since the previous release, one
+linked title per line, newest first; `scripts/prepare_changelog_release.py
+prepare <version>` writes them when the release is cut, and nobody writes them
+by hand (§AR-001-ci.8.3). Follow a line to its pull request for the detail,
+including the migration steps a breaking change carries. Releases up to 0.11.0
+were written by hand and keep their prose.
 
-## 1. Conventions
-
-- **Sections per release:** `Added`, `Changed`, `Deprecated`, `Removed`,
-  `Fixed`, `Security` — the Keep-a-Changelog set; omit any with no entries. A
-  large entry (a first release, most of all) may add narrative subsection
-  headings when the standard six would bury the structure.
-- **Entry style:** one bullet per change, present tense, leading with the
-  affected ID, e.g. `§FS-004-check-audit.5: skip unmeasurable paths instead of
-  aborting`.
-- **Progressive discovery:** only **Unreleased** and the most recent release
-  are inline. When a release ships, `scripts/prepare_changelog_release.py
-  prepare <version>` promotes Unreleased, archives the previous inline release
-  to `docs/changelog/<version>.md`, and links it under
-  [§3 Older releases](#3-older-releases). The release workflow reads the
-  published notes back with the same script (§AR-001-ci.8).
-
-## Unreleased
-
-## 2. [0.11.0] — 2026-10-03
+## 1. [0.11.0] — 2026-10-03
 
 ### Added
 
@@ -73,7 +53,7 @@ and at 0.x semver puts the minor number in charge of it.
   path that names the repository root and leave the registry untouched.
   (PR #85)
 
-## 3. Older releases
+## 2. Older releases
 
 - [0.10.1](changelog/0.10.1.md) — 2026-09-21: - §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged failures describe the `fissile check --staged` verdict instead of claiming an unknown commit hook blocked a commit, explain that filename-passing snapshot hooks keep soft findings advisory, and document how hook managers enforce bounded soft-edit promotion.
 - [0.10.0](changelog/0.10.0.md) — 2026-09-14: - The links to the sibling tools now name `agent-grounds`, which `grund` and `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md` pointers to `grund`, and the config-home decision's reference to `rhei`'s matching issue.

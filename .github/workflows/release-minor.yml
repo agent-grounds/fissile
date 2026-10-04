@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
   actions: write   # gh workflow run needs actions:write to dispatch
+  pull-requests: read   # prepare lists the merged pull requests (§AR-001-ci.8.3)
 
 env:
   CARGO_TERM_COLOR: always
@@ -33,9 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)"
+          # The highest exact vX.Y.Z tag HEAD can reach, the rule prepare uses
+          # for the previous release (§AR-001-ci.8.3.1).
+          tag="$(git tag --list 'v*.*.*' --merged HEAD --sort=-v:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
           if [ -z "$tag" ]; then
-            echo "error: no v*.*.* tag exists; bootstrap the first release manually" >&2
+            echo "error: no vX.Y.Z tag is reachable from HEAD; bootstrap the first release manually" >&2
             exit 1
           fi
           current="${tag#v}"
@@ -89,6 +93,9 @@ jobs:
           tool: cargo-edit
 
       - name: Bump version and refresh lockfile
+        env:
+          # Reads the merged pull requests the release notes list (§AR-001-ci.8.1).
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         shell: bash
         run: |
           set -euo pipefail
