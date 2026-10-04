@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
-"""Prepare and read changelog release sections. §AR-001-ci.8"""
+"""Prepare and read changelog release sections. §AR-001-ci.8, §AR-001-ci.8.3"""
 
 from __future__ import annotations
 
 import argparse
 import datetime as _datetime
+import os
 import re
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Sequence
 
+import release_notes
+
 
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
-UNRELEASED_RE = re.compile(r"^## Unreleased\s*$")
 RELEASE_RE = re.compile(
     r"^## (?P<number>[0-9]+)\. \[(?P<version>[0-9]+\.[0-9]+\.[0-9]+)\] — (?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})\s*$"
 )
 OLDER_RE = re.compile(r"^## (?P<number>[0-9]+)\. Older releases\s*$")
+PULL_LINE_RE = re.compile(r"^- \[(?P<title>(?:\\.|[^\\\[\]])*)\]\(https://github\.com/[^()\s]+/pull/[0-9]+\) \(PR #[0-9]+\)$")
 
 
 class ChangelogError(Exception):
@@ -24,56 +29,102 @@ class ChangelogError(Exception):
 
 
 def prepare_release(changelog: Path, version: str, release_date: str) -> None:
+    """Write `## 1. [version]` from the merged pull requests and archive the previous release.
+
+    Everything is read and validated before anything is written (§AR-001-ci.8.3.6); the
+    section's shape is §AR-001-ci.8.3.5 and its body is §AR-001-ci.8.3.
+    """
     _validate_version(version)
     _validate_date(release_date)
 
     lines = _read_lines(changelog)
     sections = _find_top_level_sections(lines)
-    unreleased = _find_section(lines, sections, UNRELEASED_RE, "## Unreleased")
-    latest = _next_section_after(sections, unreleased, "latest release")
-    older = _find_section_after(lines, sections, latest, OLDER_RE, "Older releases")
-
+    if not sections:
+        raise ChangelogError(f"{changelog} has no inline release section")
+    latest = sections[0]
     latest_match = RELEASE_RE.match(_line_text(lines[latest]))
     if latest_match is None:
-        raise ChangelogError(f"expected latest release heading after ## Unreleased, got: {_line_text(lines[latest])}")
-
-    if latest_match.group("version") == version:
-        raise ChangelogError(f"docs/changelog.md already has {version} as the inline latest release")
-
-    unreleased_body = _trim_blank_lines(lines[unreleased + 1 : latest])
-    if not _has_bullet(unreleased_body):
-        raise ChangelogError("## Unreleased has no bullet entries to promote")
+        raise ChangelogError(
+            f"expected the inline release `## 1. [X.Y.Z] — YYYY-MM-DD` as the first section of {changelog}, "
+            f"got: {_line_text(lines[latest])}"
+        )
+    older = _next_section_after(sections, latest, "Older releases")
+    if OLDER_RE.match(_line_text(lines[older])) is None:
+        raise ChangelogError(f"expected `## 2. Older releases` after the inline release, got: {_line_text(lines[older])}")
 
     previous_version = latest_match.group("version")
     previous_date = latest_match.group("date")
-    previous_body = lines[latest + 1 : older]
-    archived_body = [_rewrite_relative_links_for_archive(line) for line in previous_body]
-    summary = _summary_from(previous_body)
+    if previous_version == version:
+        raise ChangelogError(f"docs/changelog.md already has {version} as the inline latest release")
 
-    archive_path = changelog.parent / "changelog" / f"{previous_version}.md"
+    archive_dir = changelog.parent / "changelog"
+    if (archive_dir / f"{version}.md").exists():
+        raise ChangelogError(f"release {version} already exists as an archive: {archive_dir / f'{version}.md'}")
+    archive_path = archive_dir / f"{previous_version}.md"
     if archive_path.exists():
         raise ChangelogError(f"archive already exists: {archive_path}")
 
+    try:
+        notes = release_notes.collect(previous_version)
+    except release_notes.ReleaseNotesError as exc:
+        raise ChangelogError(str(exc)) from exc
+
+    previous_body = lines[latest + 1 : older]
+    archived_body = [_rewrite_relative_links_for_archive(line) for line in previous_body]
+    summary = _summary_from(previous_body)
     archive_lines = [f"# {previous_version} — {previous_date}\n", *archived_body]
-    _write_lines(archive_path, archive_lines)
 
     older_body = lines[older + 1 :]
     older_body = _drop_leading_blank_lines(older_body)
     archive_link = f"- [{previous_version}](changelog/{previous_version}.md) — {previous_date}: {summary}\n"
 
     new_lines = [
-        *lines[: unreleased + 1],
+        *lines[:latest],
+        f"## 1. [{version}] — {release_date}\n",
         "\n",
-        f"## 2. [{version}] — {release_date}\n",
+        *notes,
         "\n",
-        *unreleased_body,
-        "\n",
-        "## 3. Older releases\n",
+        "## 2. Older releases\n",
         "\n",
         archive_link,
         *older_body,
     ]
-    _write_lines(changelog, new_lines)
+    _write_release(changelog, new_lines, archive_path, archive_lines)
+
+
+def _write_release(changelog: Path, lines: Sequence[str], archive: Path, archive_lines: Sequence[str]) -> None:
+    """Create the archive, then replace the changelog; undo the archive if that fails. §AR-001-ci.8.3.6"""
+    created_dir = not archive.parent.exists()
+    try:
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        with archive.open("x", encoding="utf-8") as handle:
+            handle.write("".join(archive_lines))
+    except OSError as exc:
+        _remove_quietly(archive, archive.parent if created_dir else None)
+        raise ChangelogError(f"could not write the archive {archive}: {exc}") from exc
+
+    temporary = None
+    try:
+        descriptor, name = tempfile.mkstemp(prefix=".changelog-", dir=changelog.parent)
+        temporary = Path(name)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write("".join(lines))
+        shutil.copymode(changelog, temporary)
+        os.replace(temporary, changelog)
+    except OSError as exc:
+        if temporary is not None:
+            _remove_quietly(temporary, None)
+        _remove_quietly(archive, archive.parent if created_dir else None)
+        raise ChangelogError(f"could not replace {changelog}, so the archive {archive} was removed again: {exc}") from exc
+
+
+def _remove_quietly(path: Path, directory: Path | None) -> None:
+    try:
+        path.unlink(missing_ok=True)
+        if directory is not None:
+            directory.rmdir()
+    except OSError:
+        pass
 
 
 def extract_notes(changelog: Path, version: str, output: Path) -> None:
@@ -97,24 +148,6 @@ def extract_notes(changelog: Path, version: str, output: Path) -> None:
 
 def _find_top_level_sections(lines: Sequence[str]) -> list[int]:
     return [index for index, line in enumerate(lines) if line.startswith("## ") and not line.startswith("### ")]
-
-
-def _find_section(lines: Sequence[str], sections: Sequence[int], pattern: re.Pattern[str], name: str) -> int:
-    for section in sections:
-        if pattern.match(_line_text(lines[section])):
-            return section
-    raise ChangelogError(f"missing {name} section")
-
-
-def _find_section_after(
-    lines: Sequence[str], sections: Sequence[int], after: int, pattern: re.Pattern[str], name: str
-) -> int:
-    for section in sections:
-        if section <= after:
-            continue
-        if pattern.match(_line_text(lines[section])):
-            return section
-    raise ChangelogError(f"missing {name} section")
 
 
 def _next_section_after(sections: Sequence[int], after: int, name: str) -> int:
@@ -158,11 +191,12 @@ def _drop_leading_blank_lines(lines: Sequence[str]) -> list[str]:
     return trimmed
 
 
-def _has_bullet(lines: Sequence[str]) -> bool:
-    return any(line.lstrip().startswith("- ") for line in lines)
-
-
 def _summary_from(lines: Sequence[str]) -> str:
+    """A prose body's first sentence; a generated list's first title. §AR-001-ci.8.3.5"""
+    listed = [PULL_LINE_RE.match(_line_text(line)) for line in lines if line.strip()]
+    if listed and all(listed):
+        return listed[0].group("title")
+
     paragraph: list[str] = []
     for line in lines:
         stripped = line.strip()
@@ -216,7 +250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--changelog", type=Path, default=Path("docs/changelog.md"))
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    prepare = subparsers.add_parser("prepare", help="promote Unreleased into a numbered release")
+    prepare = subparsers.add_parser("prepare", help="write the next release from the pull requests merged since the previous tag")
     prepare.add_argument("version")
     prepare.add_argument("--date", default=_datetime.date.today().isoformat())
 
