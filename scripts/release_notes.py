@@ -131,6 +131,8 @@ def _pulls_of_commit(repository: str, sha: str) -> list[dict]:
     except FileNotFoundError as exc:
         raise ReleaseNotesError("the gh CLI is not installed; it reads the merged pull requests") from exc
     if result.returncode != 0:
+        if "unknown flag: --slurp" in result.stderr:
+            raise ReleaseNotesError("gh 2.48 or newer is required; this gh has no `api --slurp`")
         detail = result.stderr.strip() or f"gh exited {result.returncode}"
         raise ReleaseNotesError(f"GitHub API request {path} failed, so its pages could not be read: {detail}")
     try:
