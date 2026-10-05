@@ -12,49 +12,13 @@ by hand (§AR-001-ci.8.3). Follow a line to its pull request for the detail,
 including the migration steps a breaking change carries. Releases up to 0.11.0
 were written by hand and keep their prose.
 
-## 1. [0.11.0] — 2026-10-03
+## 1. [0.11.1] — 2026-10-05
 
-### Added
-
-- `clean.sh` at the repository root gives back the disk a checkout's builds
-  took: it runs `cargo clean`, then removes every directory holding a valid
-  `CACHEDIR.TAG`, such as a plan's scratch build under `panta/`. It is the clean
-  verb `ephor clean` runs at the root of a branch checkout no live run holds.
-  (PR #82)
-- §FS-004-check-audit.2.2: an `audit` whose scan selects no files at all says
-  so in one note on stderr, naming the directory it scanned and, inside a git
-  repository, the repository root. A run from a directory the enclosing
-  repository ignores no longer passes as a silent `ok`; stdout and the exit
-  status are unchanged. (PR #84)
-- §FS-004-check-audit.1.4: a staged soft finding's text detail separates the
-  prior committed over-soft edits from the staged one (`8 prior committed
-  over-soft edits + 1 staged edit`) and says when the prior edits had already
-  reached the promotion limit; with incomplete history it reports `at least N`.
-  The JSON fields are unchanged. (PR #83)
-
-### Changed
-
-- §FS-003-exceptions.4: the refusal when two entries of one registry match the
-  same overflow names the `path` of the first two colliding entries, in
-  registry order, and says to remove or narrow the overlap, instead of naming
-  only the registry and the measured file. **Library break, forcing 0.11.0:**
-  `ExceptionError::MultipleMatches` gains a `patterns: Box<[String; 2]>` field,
-  so code that constructs the variant or destructures it without `..` stops
-  compiling, and a caller comparing the exact message text must update.
-  (PR #86)
-
-### Fixed
-
-- §FS-004-check-audit.5: every spelling of the repository root passed to
-  `measure` or `check` (`.`, `./`, `src/..`, the absolute path) is reported as
-  the directory `.`, a file-level failure that still lets the other paths be
-  measured, instead of an invalid argument or an empty path name.
-  §FS-003-exceptions.3: `exception add`, `retune` and `remove` refuse an exact
-  path that names the repository root and leave the registry untouched.
-  (PR #85)
+- [Write release notes from the merged pull requests](https://github.com/agent-grounds/fissile/pull/89) (PR #89)
 
 ## 2. Older releases
 
+- [0.11.0](changelog/0.11.0.md) — 2026-10-03: - `clean.sh` at the repository root gives back the disk a checkout's builds took: it runs `cargo clean`, then removes every directory holding a valid `CACHEDIR.TAG`, such as a plan's scratch build under `panta/`.
 - [0.10.1](changelog/0.10.1.md) — 2026-09-21: - §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged failures describe the `fissile check --staged` verdict instead of claiming an unknown commit hook blocked a commit, explain that filename-passing snapshot hooks keep soft findings advisory, and document how hook managers enforce bounded soft-edit promotion.
 - [0.10.0](changelog/0.10.0.md) — 2026-09-14: - The links to the sibling tools now name `agent-grounds`, which `grund` and `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md` pointers to `grund`, and the config-home decision's reference to `rhei`'s matching issue.
 - [0.9.1](changelog/0.9.1.md) — 2026-09-07: - Report intake: `.github/ISSUE_TEMPLATE/` carries four GitHub issue forms — bug report, feature request, usability report, and token or time waste — each applying the matching kind label (`bug`, `enhancement`, `usability`, `tokens`) as the issue is opened, and `config.yml` turns blank issues off so no issue can arrive without a kind.
