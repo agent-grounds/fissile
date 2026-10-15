@@ -22,6 +22,38 @@ The Linux leg runs `grund check` so docs, source citations, and architecture
 references stay valid. This is separate from Rust compilation: `cargo` proves the
 crate builds, while `grund` proves the project explanation still resolves.
 
+CI and the contributor installation instructions in `README.md` and `AGENTS.md`
+use `cargo install grund --version 0.18.0 --locked`. Every active grund pin uses
+that version. Grund remains development tooling; ordinary Cargo tests do not
+require it to be installed. Its managed `AGENTS.md` block is regenerated with
+0.18.0 and passes `grund init --check`, preserving the surrounding authored
+instructions, fissile's managed block, and the tracked `CLAUDE.md` symlink.
+
+The repository's `grund.toml` declares `grund_config_version = 2`. Migration
+preserves non-strict references (`strict = false`), comments, scan scope and
+exclusions, kind definitions, citation directions, and effective rules. It
+enables no new kind fields or stricter checks, and changes no fissile runtime or
+configuration behavior. Repairs to diagnostics newly enforced by 0.18.0 preserve
+the assertions and declaration identities.
+
+The tool upgrade and diagnostic cleanup first establish a working version-1
+configuration in one commit. A separate migration commit changes only
+`grund.toml`, so reverting it alone restores usable v1 configuration under
+0.18.0. Preview with `grund config migrate --to 2` and inspect preservation
+before using `--write`. Any preview `differs:` line requires stopping and
+reporting it. Resolve ambiguous comment placement manually; never use
+`--drop-comments` or `--ignore config-version-1`.
+
+Migration evidence captures raw stdout, stderr, and exit status for
+`grund check --full`, `grund check --suggestions`, and `grund fmt --check` on
+the cleaned v1 tree and again on v2. Both runs use the identical 0.18.0 binary
+and hash, environment, checkout path, and all other tracked bytes. Each output
+stream must match byte for byte and exit codes must be equal, without removing
+warnings or normalizing differences. Retain the raw evidence and quote the
+actual comparison results and exit codes in the pull request. If a diagnostic
+prevents this proof, report it rather than weaken the comparison. Recheck
+`grund init --check` after migration and pass the required repository gate.
+
 ## 3. Packaging
 
 The Linux leg runs `cargo package --locked --list` as a cheap packaging sanity
