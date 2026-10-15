@@ -29,28 +29,49 @@ require it to be installed. Its managed `AGENTS.md` block is regenerated with
 0.18.0 and passes `grund init --check`, preserving the surrounding authored
 instructions, fissile's managed block, and the tracked `CLAUDE.md` symlink.
 
-The repository's `grund.toml` declares `grund_config_version = 2`. Migration
-preserves non-strict references (`strict = false`), comments, scan scope and
-exclusions, kind definitions, citation directions, and effective rules. It
-enables no new kind fields or stricter checks, and changes no fissile runtime or
-configuration behavior. Repairs to diagnostics newly enforced by 0.18.0 preserve
-the assertions and declaration identities.
+The repository's `grund.toml` declares `grund_config_version = 2`. Grounding
+requires marked citations and recognizes named sections. Under version 1 these
+requirements need explicit `[reference] strict = true` and
+`[id] named_sections = true`; version 2 guarantees both through the pinned
+release's semantics without those legacy keys. Preserve comments, scan scope
+and exclusions, kind definitions, citation directions, and all other effective
+policy and rules. Enable no new kind fields or additional stricter checks, and
+change no fissile runtime or configuration behavior. Diagnostic and citation
+repairs preserve sentence claims and declaration identities.
 
-The tool upgrade and diagnostic cleanup first establish a working version-1
-configuration in one commit. A separate migration commit changes only
-`grund.toml`, so reverting it alone restores usable v1 configuration under
-0.18.0. Preview with `grund config migrate --to 2` and inspect preservation
-before using `--write`. Any preview `differs:` line requires stopping and
-reporting it. Resolve ambiguous comment placement manually; never use
-`--drop-comments` or `--ignore config-version-1`.
+The implementation has four separate commits, with specification/test corrections
+additional to them:
+
+1. Upgrade to 0.18.0, regenerate guidance, and repair newly enforced diagnostics,
+   leaving the configuration at version 1.
+2. Run `grund fmt --marker --write`, review every citation spelling change, then
+   set `[reference] strict = true` under v1. Escape tokens that were not intended
+   as citations instead of leaving dangling markers. Discard unrelated formatter
+   linking and anchor rewrites. Require `grund check --full` to pass.
+3. Set `[id] named_sections = true` under v1. Retain `grund check --full` output
+   before and after, repair any headings the new reading flags so the check
+   passes, and describe whether the check changed in the commit message.
+4. Preview `grund config migrate --to 2`, then use `--write`, changing only
+   `grund.toml`. Reverting this commit alone restores the repaired, usable v1
+   configuration under 0.18.0 with both policies enabled.
+
+Refresh managed guidance before the final comparison so it no longer promises
+bare citations, preserving authored surroundings, fissile's block, and the
+`CLAUDE.md` symlink. Relocate ambiguous comments manually during v1 preparation,
+retaining their text. Inspect the migration preview; any `differs:` line or
+further refusal requires stopping and reporting before writing. Never use
+`--drop-comments`, `--ignore config-version-1`, or a fabricated replacement config.
 
 Migration evidence captures raw stdout, stderr, and exit status for
 `grund check --full`, `grund check --suggestions`, and `grund fmt --check` on
-the cleaned v1 tree and again on v2. Both runs use the identical 0.18.0 binary
-and hash, environment, checkout path, and all other tracked bytes. Each output
-stream must match byte for byte and exit codes must be equal, without removing
-warnings or normalizing differences. Retain the raw evidence and quote the
-actual comparison results and exit codes in the pull request. If a diagnostic
+the repaired v1 tree after both policy commits and again on v2. Capture fresh
+evidence; earlier upgrade captures are historical. Both runs use the identical
+0.18.0 binary and hash, environment, checkout path, and all other tracked bytes.
+Each output stream must match byte for byte and exit codes must be equal, without removing
+warnings or normalizing differences. An existing nonzero formatter status is
+acceptable only with equality; it does not authorize unrelated Markdown churn.
+Retain the raw evidence and quote the actual comparison results and exit codes
+in the pull request. If a diagnostic
 prevents this proof, report it rather than weaken the comparison. Recheck
 `grund init --check` after migration and pass the required repository gate.
 
