@@ -481,3 +481,5 @@ from earlier version-1 configs.
 
 This repo is grounded with [`grund`](https://github.com/agent-grounds/grund): the
 `§ID` markers above point at the specs and goals that justify each behavior.
+Install the same version as CI with `cargo install grund --version 0.18.0 --locked`
+(§AR-001-ci.2).

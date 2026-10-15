@@ -108,7 +108,7 @@ only whether a tool can see it.
 - Registry version stays `1`. An upgrade is not a migration: existing entries
   keep loading as `deferred`, and re-classifying them is a repository's own
   review pass, not something the tool forces at load time.
-- **Superseded in part by §DF-005-exception-identity.** The format is now version
+- **Superseded in part by §DF-005-exception-identity**. The format is now version
   `2` and a version-1 registry is refused (§FS-003-exceptions.2.2), so the
   no-migration property above no longer holds. What survives is the field's own
   design: `kind` stays optional, an entry that omits it still reads as

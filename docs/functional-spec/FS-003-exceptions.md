@@ -39,7 +39,7 @@ split loses the incident-to-case mapping the fixture exists to preserve.
 ```
 
 `fissile_exceptions_version` is required and must be `2`; version 2 removed the
-`id` and `replaces` keys version 1 carried (§2.2). Unknown keys are errors. An
+`id` and `replaces` keys version 1 carried (§FS-003-exceptions.2.2). Unknown keys are errors. An
 entry has no name of its own: it is identified by the registry it lives in and
 what it accepts (§DF-005-exception-identity). Exception files are parsed only
 according to this functional spec.
@@ -54,19 +54,19 @@ Required fields:
 - `max_accepted.value`: largest measurement this exception accepts;
 - `max_accepted.unit`: `bytes`, `lines`, or `tokens`;
 - `until`: review condition, date, or `indefinite`;
-- `reason`: non-empty rationale, establishing what §2.1 requires of the entry's
+- `reason`: non-empty rationale, establishing what §FS-003-exceptions.2.1 requires of the entry's
   kind.
 
 A soft entry that declares `shadows = "hard"` states neither `until` nor
 `reason`: it inherits both from the hard entry it shadows, and stating either
-here is an error (§2.3).
+here is an error (§FS-003-exceptions.2.3).
 
 Optional fields:
 
-- `kind`: `structural` or `deferred` (§2.1); an entry without one reads as
+- `kind`: `structural` or `deferred` (§FS-003-exceptions.2.1); an entry without one reads as
   `deferred`;
 - `shadows`: `"hard"` on a soft entry, whose `until` and `reason` then come from
-  the hard registry (§2.3);
+  the hard registry (§FS-003-exceptions.2.3);
 - `title`: short human-readable label;
 - `owner`: team, person, or component responsible for retiring the exception;
 - `issue`: tracker URL or ID.
@@ -75,7 +75,7 @@ There is no `created` field: the date an exception was added is recorded by the
 commit that added it, so duplicating it in the entry would only invite drift.
 
 Unknown fields are errors so typos cannot silently weaken the registry. That is
-also what makes a leftover `id` a named error rather than a silent no-op (§2.2).
+also what makes a leftover `id` a named error rather than a silent no-op (§FS-003-exceptions.2.2).
 
 ### 2.1 Kind, And What A Reason Must Establish
 
@@ -110,7 +110,7 @@ for that is a name that can be wrong (§DF-005-exception-identity).
 
 The removal is a break, not a tolerated leftover. A registry declaring version 1
 is rejected, and a version-2 registry that still carries `id` fails on the
-unknown key (§2) — so no file is left holding a field that silently means
+unknown key (§FS-003-exceptions.2) — so no file is left holding a field that silently means
 nothing. Migrating one registry is two edits:
 
 1. set `fissile_exceptions_version = 2`;
@@ -129,7 +129,7 @@ one that names the whole fix.
 ### 2.3 A Soft Twin May Point At The Hard Entry Instead Of Restating It
 
 A `deferred` hard entry silences the hard finding and leaves the soft one
-standing (§3), so every deferred hard acceptance needs a soft entry beside it
+standing (§FS-003-exceptions.3), so every deferred hard acceptance needs a soft entry beside it
 before the file goes quiet. That soft entry owns no judgment. Whether to accept
 the file, why it may be accepted, and what retires the acceptance were all
 decided in the hard registry. Requiring the twin to state a `reason` and an
@@ -150,7 +150,7 @@ max_accepted = { value = 1592, unit = "lines" }
 
 The entry resolves to the hard entry at the same address and takes that entry's
 `reason` and `until` as its own, so `audit`, verbose output, and stale reporting
-read a shadowing entry exactly like any other (§5).
+read a shadowing entry exactly like any other (§FS-003-exceptions.5).
 
 - `shadows` is legal only in the soft registry, and `"hard"` is its only value.
   A hard entry that declares it is a schema error: the hard registry is where
@@ -163,13 +163,13 @@ read a shadowing entry exactly like any other (§5).
   `match`, and the same `max_accepted.unit`, whose `rules` cover every rule the
   shadowing entry lists. Exactly one hard entry must answer it: none is a schema
   error and more than one is an ambiguity error, each naming the shadowing
-  entry's site (§4). Both also name the hard registry's configured path, whether
+  entry's site (§FS-003-exceptions.4). Both also name the hard registry's configured path, whether
   or not that file exists, since the reader's next edit is in it; and the
   ambiguity names what tells the two candidates apart, reporting a duplicate
   when their rule lists are equal and nothing does. Deleting the hard entry
   therefore fails the load until the twin goes too, which is what makes "retires
   with its twin" a fact rather than a convention.
-- `kind` stays the shadowing entry's own field, and the §2.1 agreement is
+- `kind` stays the shadowing entry's own field, and the §FS-003-exceptions.2.1 agreement is
   checked against the **inherited** `until`. So a `deferred` twin of a
   structural hard entry inherits `indefinite` and fails to load — the forced
   revisit when the original's kind flips.
@@ -202,12 +202,12 @@ or below its accepted maximum. If the measured value is higher than
 
 A hard finding that still stands — no entry matched, or the file grew past its
 ceiling — suppresses the soft finding on its own (§GOAL-006-graded-limits.1).
-When a hard finding is *silenced*, the accepting entry's `kind` (§2.1) decides
+When a hard finding is *silenced*, the accepting entry's `kind` (§FS-003-exceptions.2.1) decides
 what happens to the soft finding for the same overflow:
 
 - `kind = "deferred"` — the soft finding is still emitted, so agents keep
   minimizing accepted human debt. An entry that declares no kind reads as
-  `deferred` (§2.1) and behaves this way.
+  `deferred` (§FS-003-exceptions.2.1) and behaves this way.
 - `kind = "structural"` — the soft finding is silenced too. Splitting the file is
   illegal, so the warning asks for work nobody may do and no amount of work can
   clear it. A structural hard entry ends the evaluation of that overflow: the
@@ -215,7 +215,7 @@ what happens to the soft finding for the same overflow:
   same overflow silences nothing while the hard entry is doing it.
 
 The rule reads the hard entry's kind only. A `kind` in the soft registry says
-what its own reason must establish (§2.1) and changes nothing about matching.
+what its own reason must establish (§FS-003-exceptions.2.1) and changes nothing about matching.
 
 The rule reaches only as far as a hard finding does. A file below the hard limit
 produces no hard finding, so the hard registry is never consulted for it and the
@@ -264,13 +264,13 @@ same overflow are two severities, not a collision.
 - `reason` is stated and not empty after trimming whitespace — an omitted field
   and a blank one are one defect, the entry carries no rationale, and are
   reported as one;
-- a declared `kind` agrees with `until` (§2.1): `structural` requires
+- a declared `kind` agrees with `until` (§FS-003-exceptions.2.1): `structural` requires
   `indefinite`, `deferred` forbids it — for a shadowing entry, against the
-  `until` it inherited (§2.3);
+  `until` it inherited (§FS-003-exceptions.2.3);
 - `shadows` appears only in the soft registry, holds only `"hard"`, and never
-  stands beside `reason` or `until` (§2.3);
+  stands beside `reason` or `until` (§FS-003-exceptions.2.3);
 - every `shadows = "hard"` entry resolves to exactly one hard entry at its
-  address, whose `reason` and `until` it then carries (§2.3);
+  address, whose `reason` and `until` it then carries (§FS-003-exceptions.2.3);
 - every matched path is inside the scan scope unless stale handling is disabled;
 - every stale entry follows `[exceptions].stale`: `warn`, `error`, or `ignore`.
 
@@ -363,7 +363,7 @@ The two conditions are exclusive — slack cannot be both wider than a step and
 zero — so an entry is loose, or without headroom, or neither. A glob is out of
 both, for the reason the first condition gives. A ceiling *below* its file is
 neither: that entry has stopped silencing, and `check` reports the overflow
-itself (§3).
+itself (§FS-003-exceptions.3).
 
 `audit --stale-exceptions` reports both alongside stale ones
 (§FS-004-check-audit.2), each named by its registry and `path`. A loose entry

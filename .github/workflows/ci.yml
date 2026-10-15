@@ -82,9 +82,10 @@ jobs:
           sys.exit(result.returncode)
           PY
 
+      # Grounding tooling matches contributor setup (§AR-001-ci.2).
       - name: Install grund
         if: matrix.os == 'ubuntu-latest'
-        run: RUSTFLAGS= cargo install grund --version 0.13.0 --locked
+        run: RUSTFLAGS= cargo install grund --version 0.18.0 --locked
 
       - name: grund check
         if: matrix.os == 'ubuntu-latest'

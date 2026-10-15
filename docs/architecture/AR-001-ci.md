@@ -66,7 +66,7 @@ CI carries a cheap wall-clock backstop for §GOAL-001-fast-feedback: the matrix
 runs the `large_batch_smoke` release test under a generous 30 second timeout. The
 budget itself is much tighter than that; this guard is for catastrophic
 regressions such as an accidental quadratic path or a repeated scan over every
-file. The precise per-commit meter is the benchmark job in §5.
+file. The precise per-commit meter is the benchmark job in §AR-001-ci.5.
 
 The test binary is compiled in a separate step before the timed one, so the
 clock measures the scan and not the compiler: the release profile is LTO with a
@@ -118,13 +118,13 @@ consumer can install (§GOAL-002-tiny-footprint.1):
 - **Verify.** The requested version must match `Cargo.toml` exactly, and when
   crates.io publishing is requested the registry token must be present before
   any long build starts.
-- **Build.** PGO release binaries (§6) for six targets: `x86_64` and `aarch64`
+- **Build.** PGO release binaries (§AR-001-ci.6) for six targets: `x86_64` and `aarch64`
   Linux built inside pinned manylinux2014 containers so the glibc baseline
   cannot drift, plus native macOS (Intel and Apple silicon) and Windows
   (`x86_64` required, `aarch64` with an LTO fallback when PGO training fails on
   hosted runners). Every binary must answer `fissile --version` with the version
   being released before it is packaged (§FS-006-cli.3), and every artifact is
-  measured against the §7 size ceiling.
+  measured against the §AR-001-ci.7 size ceiling.
 - **Publish.** `cargo publish` runs only after all binaries built, and skips
   silently when the exact `fissile@<version>` already exists so a re-run after a
   partial failure is safe. The GitHub release uploads one archive plus a

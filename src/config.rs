@@ -56,7 +56,7 @@ pub enum ConfigSource {
 
 impl ConfigSource {
     /// The one warning line this run owes the reader, or `None` when the config
-    /// came from somewhere that needs no comment (§FS-001-config.8.2, §8.3).
+    /// came from somewhere that needs no comment (§FS-001-config.8.2, §FS-001-config.8.3).
     pub fn deprecation(&self) -> Option<&'static str> {
         match self {
             ConfigSource::Deprecated => Some(DEPRECATED_WARNING),
