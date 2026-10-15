@@ -1,3 +1,7 @@
+# Legacy [output] choices:
+# format: text | json
+# color: auto | always | never
+
 grund_config_version = 1
 project_name = "fissile"
 
@@ -13,6 +17,7 @@ inline_note_max_columns = 100
 warn_on_suggested = false
 
 [id]
+named_sections = true
 format = "{kind}-{number}-{slug}" # placeholders: {kind} required; use {number}, {slug}, or both
 section_separator = "."
 section_heading_levels = "strict" # strict | warn | loose
@@ -88,8 +93,8 @@ docstring_python = true
 respect_gitignore = true
 
 [output]
-format = "text" # text | json
-color = "auto" # auto | always | never
+format = "text"
+color = "auto"
 relative_paths = true
 
 [fmt.cross_refs]
