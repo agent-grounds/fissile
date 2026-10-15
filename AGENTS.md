@@ -30,6 +30,7 @@ A `§<ID>` is a pointer to a fact, not a file path. Resolve it with `grund` and 
 - [tests/e2e/](tests/e2e): User scenarios: black-box proof of the spec
 - [tests/integration/](tests/integration): Integration tests: proof that the parts fit as designed
 - [RM](docs/roadmap.md): Planned milestones and sequencing
+- [docs/](docs), [tests/](tests), [src/](src): Declaration
 
 ### Declarations and citations
 
