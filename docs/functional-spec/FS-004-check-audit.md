@@ -16,14 +16,14 @@ Without `--staged`, `check` evaluates the paths passed by the caller or the
 configured scan scope. A file strictly above a soft limit produces a finding
 and exits `0` unless a matching soft exception applies; equality passes. On
 `check --staged`, a history-proven continuous run of over-soft edits can promote
-that soft finding into a commit block (§1.4). A file strictly above a hard limit
+that soft finding into a commit block (§FS-004-check-audit.1.4). A file strictly above a hard limit
 produces a finding and exits non-zero unless a matching hard exception applies;
 equality passes. Severity and promotion are not invocation-time knobs.
 This is the stable CI/pre-commit contract: the same invocation mode, selected
 content, config, and available history must produce the same pass/fail result
 locally and remotely (§GOAL-003-friendly-output). Equal index and working-tree
 bytes do not make a staged invocation and a snapshot invocation equivalent:
-only the staged invocation proves and spends edit history (§1.4).
+only the staged invocation proves and spends edit history (§FS-004-check-audit.1.4).
 
 Text findings are grouped, one block per `(severity, rule, rendered guidance)`.
 The header names the severity, the file count, the crossed limit, the rule, and
@@ -124,9 +124,9 @@ crossed, so the hint is not about that file. It is about the ones the split
 moves code *into*, whose headroom decides where the seam can go and which no
 other tool computes (§FS-007-measure). One line, once per run, never per file,
 and only when a *finding* was reported — a run whose only block is the stale
-inventory of §1.3 has no split to place, and a clean run stays exactly `ok`.
+inventory of §FS-004-check-audit.1.3 has no split to place, and a clean run stays exactly `ok`.
 
-This line and §1.2 are the two things `check` prints that are not findings. Both
+This line and §FS-004-check-audit.1.2 are the two things `check` prints that are not findings. Both
 exist because the instructions they carry left the managed agent block
 (§DF-007-instructions-at-the-error-site.2), and both are bounded to a single
 line so that §GOAL-004-token-thrift still holds for a run that reports many
@@ -147,7 +147,7 @@ human for a reviewed hard exception. If this command is the commit hook,
 bypassing it with `--no-verify` leaves the overflow for review or CI.
 ```
 
-A promoted soft overflow (§1.4), which remains on the soft-debt route and
+A promoted soft overflow (§FS-004-check-audit.1.4), which remains on the soft-debt route and
 explains why a filename-passing hook can accept the same bytes:
 
 ```text
@@ -159,7 +159,7 @@ debt with `fissile exception add <path> --severity soft --rule <rule> --kind
 review or CI.
 ```
 
-A dead exception entry under `[exceptions].stale = "error"` (§1.3), where there
+A dead exception entry under `[exceptions].stale = "error"` (§FS-004-check-audit.1.3), where there
 is no file to split and the fix is in the registry the block above names:
 
 ```text
@@ -168,7 +168,7 @@ entry above, or point it at the path its file moved to. If this command is the
 commit hook, bypassing it with `--no-verify` leaves a dead entry in the registry.
 ```
 
-A staged file that could not be measured, which exits 2 (§5) with nothing above
+A staged file that could not be measured, which exits 2 (§FS-004-check-audit.5) with nothing above
 accounting for it:
 
 ```text
@@ -203,7 +203,7 @@ stale: 1 exception accepts a file that is not there [registry: docs/file-size-ag
 ```
 
 Entries are reported under `[exceptions].stale`: `warn` reports them, `error`
-also fails the run — and through the pre-commit hook, blocks the commit (§1.2) —
+also fails the run — and through the pre-commit hook, blocks the commit (§FS-004-check-audit.1.2) —
 `ignore` says nothing (§FS-003-exceptions.4).
 
 `check` reports only what its file set proves, and its three file sets prove
@@ -213,9 +213,9 @@ different things:
   reported when the run stages the deletion of its path or a rename away from
   it — the moment it died, with the diff that killed it on screen.
 - **The configured scan scope** — plain `fissile check` — is the whole
-  inventory, so an entry matching nothing in it is stale by §2's comparison,
+  inventory, so an entry matching nothing in it is stale by §FS-004-check-audit.2's comparison,
   provided no file stands at its path: one the scope excludes or git ignores is
-  right where the entry says, and §2 reports it without blocking a build.
+  right where the entry says, and §FS-004-check-audit.2 reports it without blocking a build.
 - **Caller-passed paths** are a window, not an inventory, and prove nothing
   about an entry naming some other file. Nothing is reported.
 
@@ -226,10 +226,10 @@ under `error` each would stand between the author and every later commit over an
 entry that is still correct.
 
 Globs are not judged here: a glob matching no file today is a question about the
-scan scope, which is `audit`'s inventory to answer (§2), not a fact a commit
+scan scope, which is `audit`'s inventory to answer (§FS-004-check-audit.2), not a fact a commit
 hook can establish.
 
-So this is the staleness §2 reports, under the same setting and by the same
+So this is the staleness §FS-004-check-audit.2 reports, under the same setting and by the same
 comparison — one fact, not two (§FS-003-exceptions.4). `check` only ever says
 less: a narrower file set, and never a file that is still there.
 
@@ -251,7 +251,7 @@ A staged soft finding additionally carries `soft_edit_count`,
 `"severity":"soft"` and adds `"promotion":"soft_edit_limit"`; a true hard
 size overflow carries none of those fields. This keeps the exception route and
 the reason for the blocking exit machine-visible without misreporting a soft
-overflow as a hard-size overflow (§1.4).
+overflow as a hard-size overflow (§FS-004-check-audit.1.4).
 
 `exception_would_accept` carries the same number the text detail names and is
 omitted wherever the text withholds it, so a consumer of `--format json` chooses
@@ -263,10 +263,10 @@ When no findings are emitted, text output prints exactly `ok`; JSON output emits
 no success envelope.
 
 A `check` run can exit non-zero for something that is not an overflow — a dead
-exception entry under `[exceptions].stale = "error"` (§1.3). The findings array
+exception entry under `[exceptions].stale = "error"` (§FS-004-check-audit.1.3). The findings array
 is the stable machine contract and grows no second record shape for it: the
 stale block goes to stderr, which already owns every diagnostic a JSON run emits
-(§5). What is ruled out is the one shape a consumer cannot act on — an empty
+(§FS-004-check-audit.5). What is ruled out is the one shape a consumer cannot act on — an empty
 array, a failing exit code, and nothing anywhere saying why.
 
 ### 1.4 Bounded grace for staged soft edits
@@ -476,7 +476,7 @@ state. It is for adoption and maintenance, not just pass/fail.
   the registry pass without `--stale-exceptions`: the flag that would otherwise
   ask for the section is what naming it already says. `findings` is the standing
   findings, or the success marker in their place — the marker is what an empty
-  findings section prints (§1), so it appears when `findings` is named and not
+  findings section prints (§FS-004-check-audit.1), so it appears when `findings` is named and not
   otherwise, and `--only coverage` in a repository with nothing to report prints
   coverage and no `ok`.
 
@@ -501,7 +501,7 @@ state. It is for adoption and maintenance, not just pass/fail.
 
   Selection governs what is printed and nothing else. Exit status is computed
   from the whole run, so a repository with a standing hard overflow run with
-  `--only coverage` still exits non-zero, and §5's exit `2` for a file that
+  `--only coverage` still exits non-zero, and §FS-004-check-audit.5's exit `2` for a file that
   could not be measured is equally untouched — as is every stderr diagnostic
   either one carries. A flag that changed a gate's exit code by hiding its
   output would be a trap, and hiding is all this flag does.
@@ -518,7 +518,7 @@ state. It is for adoption and maintenance, not just pass/fail.
 
   An unknown or empty section name is a usage error naming the name that was
   not recognized and the valid set in canonical order, and exits `2` with its
-  diagnostic on stderr (§5) — never a silent empty report, which reads exactly
+  diagnostic on stderr (§FS-004-check-audit.5) — never a silent empty report, which reads exactly
   like a section that had nothing in it. The eight names are public API in a
   second place from here on: renaming one breaks a command line as well as a
   JSON consumer.

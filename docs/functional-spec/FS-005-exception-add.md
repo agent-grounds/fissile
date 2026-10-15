@@ -40,11 +40,11 @@ written.
 
 The command does not judge the prose, with one bounded exception. When a
 `--reason` says nothing beyond the finding's own facts, it warns and still
-writes the entry (§4). It never refuses on prose: the test can only catch a
+writes the entry (§FS-005-exception-add.4). It never refuses on prose: the test can only catch a
 reason that is *entirely* restatement, and a command that rejected a terse but
 honest claim would teach callers to pad it.
 
-`--force` is the way past the severity gate in §4. It has no other effect.
+`--force` is the way past the severity gate in §FS-005-exception-add.4. It has no other effect.
 
 `--match` defaults to `exact`. `glob` is allowed only when `<path>` contains a
 glob metacharacter. The command never creates `[scan].exclude` entries; accepted
@@ -71,20 +71,20 @@ still writes a `max_accepted` that is the twin's own to move
 
 The hard entry has to exist already. When no hard entry answers the address, or
 more than one does, the command refuses without writing and names the registry
-it looked in (§4): the shadow of a decision nobody recorded is not a shadow, and
+it looked in (§FS-005-exception-add.4): the shadow of a decision nobody recorded is not a shadow, and
 guessing which of two entries it points at would decide the thing the flag
 exists to state.
 
-The hard-limit rule in §4 applies unchanged, and `--shadows-hard` does not buy
+The hard-limit rule in §FS-005-exception-add.4 applies unchanged, and `--shadows-hard` does not buy
 past it. The flag guarantees a hard entry at the address, not a **deferred**
 one: shadowing a `deferred` entry accepts a ceiling at or above the rule's hard
 limit, because that entry keeps the soft finding alive up there
 (§FS-003-exceptions.3); shadowing a `structural` one is refused on the same
 terms as any other soft entry, since evaluation ends at the hard entry and the
 soft ceiling would never fire. A file already at or above the limit is spared by
-§4's own exemption, whichever kind the twin declares.
+§FS-005-exception-add.4's own exemption, whichever kind the twin declares.
 
-The restatement check (§4) does not apply to a shadowing entry. There is no
+The restatement check (§FS-005-exception-add.4) does not apply to a shadowing entry. There is no
 reason of its own to judge, which is the point of writing it this way.
 
 ## 2. Accepted Size
@@ -113,7 +113,7 @@ measurement alone.
 A stated ceiling names the step it did not take. When `--max` is not a multiple
 of the step, the result names the next multiple — the round number the measured
 form would have chosen — as a suggestion, never applied, and omitted when that
-number is one §4 would refuse:
+number is one §FS-005-exception-add.4 would refuse:
 
 ```console
 $ fissile exception add README.md --severity hard --rule entrypoints \
@@ -133,7 +133,7 @@ chose its number.
 For `--match glob`, `--max` and `--unit` are required because there is no single
 file measurement to infer — so a glob ceiling is always the number stated.
 
-A `--severity soft` ceiling at or above the rule's hard limit is refused (§4):
+A `--severity soft` ceiling at or above the rule's hard limit is refused (§FS-005-exception-add.4):
 the hard finding fires there and suppresses the soft one, so the entry would
 never fire (§DF-010-stated-ceilings-are-exact.2). A glob is held to the same
 rule — it measures nothing, so no class of files can claim the exemption a
@@ -202,9 +202,9 @@ modifying files when:
 
 - the selected rule does not exist;
 - selected rules use different units;
-- `--kind` is absent, or `--until` disagrees with it (§1);
+- `--kind` is absent, or `--until` disagrees with it (§FS-005-exception-add.1);
 - `--shadows-hard` was passed with `--severity hard`, or alongside `--kind`,
-  `--reason`, or `--until` (§1.1). The refusal names the flag to drop: a
+  `--reason`, or `--until` (§FS-005-exception-add.1.1). The refusal names the flag to drop: a
   shadowing entry that also carried one of them would be the second copy the
   field exists to remove (§FS-003-exceptions.2.3);
 - `--shadows-hard` was passed and the hard registry holds no entry — or holds
@@ -266,7 +266,7 @@ from it (§DF-004-exception-kind), which is a reason to say so, not to block a
 commit on a word count.
 
 `--dry-run` prints the TOML entry that would be appended and the registry path it
-would update — with the same next-step suggestion §2 names, when `--max` supplied
+would update — with the same next-step suggestion §FS-005-exception-add.2 names, when `--max` supplied
 a ceiling off the step:
 
 ```text

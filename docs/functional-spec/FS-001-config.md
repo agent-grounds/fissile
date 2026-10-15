@@ -2,7 +2,7 @@
 
 `fissile` is configured by a single TOML document. Its home is
 `.agent-grounds/fissile.toml`, and the former home `.agents/fissile.toml` is
-still read and reported as deprecated (§8); an embedding CLI may also pass an
+still read and reported as deprecated (§FS-001-config.8); an embedding CLI may also pass an
 explicit path. The config is data, not code, so it can be read inside a
 pre-commit hook without invoking a plugin system (§GOAL-002-tiny-footprint)
 while still making limits and messages project-owned (§GOAL-005-configurable).
@@ -22,7 +22,7 @@ A repo with no config still gets a useful guard:
   files live, while leaving data and generated formats to the byte budget
   (§GND-001-fissile);
 - apply a line budget to markdown under two rules, not one, because there are
-  two ways a markdown file is read and they cost different things (§0.1);
+  two ways a markdown file is read and they cost different things (§FS-001-config.0.1);
 - use generic messages that explain how to tune config rather than pretending to
   know the repository's architecture.
 
@@ -59,7 +59,7 @@ the defaults carry one rule for each way:
   lines**.
 
 The entrypoint selectors are exact filenames and a directory glob, and both
-outrank the citable-spec rule's `**/*.md` on the specificity order in §3.2, so
+outrank the citable-spec rule's `**/*.md` on the specificity order in §FS-001-config.3.2, so
 the split needs no `priority`.
 
 750 is roughly 3x the p95 of a spec tree that is already kept tidy, and 2000 is
@@ -71,7 +71,7 @@ grounding work made their documents cheap to read.
 An append-only record — a changelog — is a third mode and fits neither tier;
 splitting one is meaningless. The defaults do not guess at it, and a repository
 that keeps one can exclude it from the citable-spec line rule while retaining
-the byte catch-all (§3.4).
+the byte catch-all (§FS-001-config.3.4).
 
 ## 1. Top-level version
 
@@ -171,7 +171,7 @@ actually protects against binary blobs (§FS-004-check-audit.3).
 ### 3.2 Overlapping Rules
 
 A file may match more than one applicable rule. Rule-local exclusions are
-applied first (§3.4); overlap is then resolved independently for each measurement
+applied first (§FS-001-config.3.4); overlap is then resolved independently for each measurement
 unit (`bytes`, `lines`, `tokens`), because a project may reasonably check one
 file by both line count and byte count. For a given `(file, unit)`, `fissile`
 selects one effective rule:
@@ -271,7 +271,7 @@ Omitting `exclude` and writing `exclude = []` are equivalent, so existing versio
 1 configurations retain their behavior.
 
 Applicability is decided before same-unit priority and specificity resolution
-(§3.2). A rule excluded for a path cannot win that path or make its remaining
+(§FS-001-config.3.2). A rule excluded for a path cannot win that path or make its remaining
 candidates ambiguous. Only that rule becomes inapplicable: every other rule,
 including rules for other measurement units, remains eligible. Checking,
 measurement, audit rule coverage, and catch-all-only classification all use this
@@ -391,10 +391,10 @@ Without an explicit path, `fissile` uses the first of these that exists:
 
 1. `<root>/.agent-grounds/fissile.toml`;
 2. `<root>/.agents/fissile.toml`;
-3. the built-in defaults (§0).
+3. the built-in defaults (§FS-001-config.0).
 
 Discovery stops at the first path that is present. A file that exists but does
-not parse is an error naming that file (§1), not a miss: falling through to the
+not parse is an error naming that file (§FS-001-config.1), not a miss: falling through to the
 next candidate would govern the repository by a document the reader did not
 mean to be in force, and say nothing about the one they were editing.
 
@@ -414,7 +414,7 @@ fissile: warning: .agents/fissile.toml is deprecated; move it to .agent-grounds/
 
 The line goes to stderr in every mode, including `--format json`. Stdout carries
 the findings, and under `--format json` it is a stream a caller parses
-(§6, §FS-004-check-audit.1); a warning that entered it would break that caller,
+(§FS-001-config.6, §FS-004-check-audit.1); a warning that entered it would break that caller,
 and the deprecation is addressed to the person reading the terminal rather than
 to the program reading the output.
 

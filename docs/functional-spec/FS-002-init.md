@@ -24,7 +24,7 @@ fissile init [<path>] [--name <name>] [--force] [--dry-run]
   is `.agent-grounds/fissile.toml` (§FS-001-config.8).
 - `--exceptions` also creates the configured soft and hard exception registry
   paths when absent.
-- `--hook` forces installation of the managed pre-commit hook (§6) and errors if
+- `--hook` forces installation of the managed pre-commit hook (§FS-002-init.6) and errors if
   the target is not a git repository. `--no-hook` suppresses the install that
   automatic mode would otherwise perform. The two flags are mutually exclusive.
 - `--force` refreshes managed agent blocks and generated starter files. It does
@@ -36,13 +36,13 @@ fissile init [<path>] [--name <name>] [--force] [--dry-run]
   `AGENTS.md`.
 
 `init` is non-interactive. It never prompts and never guesses beyond the automatic
-entrypoint selection rules in §3 and the automatic hook install in §6.
+entrypoint selection rules in §FS-002-init.3 and the automatic hook install in §FS-002-init.6.
 
 ## 2. Files
 
 Default `fissile init` writes:
 
-- one agent entrypoint or managed block, per §3;
+- one agent entrypoint or managed block, per §FS-002-init.3;
 - `<path>/.agent-grounds/fissile.toml`, when absent, using the schema from
   §FS-001-config. The generated config is fully populated: every schema field is
   written at its default value, ready to edit in place, rather than a minimal
@@ -103,7 +103,7 @@ exist yet and this is the only entrypoint that does, in which case its bytes
 
 Any other companion holding bytes of its own is kept as a regular file with the
 block written into it, and the run says it was kept: overwriting would destroy
-what §4 promises to preserve, and `init` cannot know whether two entrypoints
+what §FS-002-init.4 promises to preserve, and `init` cannot know whether two entrypoints
 disagree on purpose. Where the filesystem refuses a link — Windows without
 Developer Mode — `init` writes the block into the file and says so rather than
 failing, because a duplicated block beats no instructions.
@@ -127,7 +127,7 @@ it inside the region, as `protoc-gen-go` does on its first comment lines. The
 markers say which tool owns the span; the heading says which generation of the
 text it is. Nothing has to parse a delimiter to answer the second question.
 
-The hook block (§6) states its version in its marker instead. A shell file has
+The hook block (§FS-002-init.6) states its version in its marker instead. A shell file has
 no heading to carry it, and `# >>> ... >>>` is the shape `conda init` writes
 into the same kind of file.
 
@@ -155,7 +155,7 @@ wholesale — leaving part of the old body outside the new markers would put a
 duplicate in the file that no later run can clean up. How far it runs depends on
 what else bounds a block in that file. In Markdown, headings do: the span ends
 at the next H1 or H2 that is not the block's own, or at end of file, so sections
-a user wrote below survive. The hook block (§6) has no such boundary — a shell
+a user wrote below survive. The hook block (§FS-002-init.6) has no such boundary — a shell
 file has no headings, and every `# ` comment in one would be mistaken for one —
 so its truncated span runs to end of file.
 
@@ -173,14 +173,14 @@ The v3 block teaches three things, and deliberately no more
   before the code is written, since a finding cannot reach an agent until the
   file is already too long;
 - that `fissile check --staged` is run before calling work done, which reaches
-  the repositories where no hook fires (§6);
+  the repositories where no hook fires (§FS-002-init.6);
 - that the gate is not bypassed with `--no-verify`.
 
 The block is written by every `init` run, including the ones that install no
-hook — `--no-hook`, and a target that is not a git repository (§6) — so it
+hook — `--no-hook`, and a target that is not a git repository (§FS-002-init.6) — so it
 states the habit as the instruction and the hook as the conditional. A block
 asserting a pre-commit hook that the same run just reported it did not install
-(§5) would be the first thing an agent read about this repository and false.
+(§FS-002-init.5) would be the first thing an agent read about this repository and false.
 
 Everything the v2 block said about severities, seams, exceptions, ceilings, and
 stale entries is said by the surface that raises each one: the finding and its
@@ -230,19 +230,19 @@ the reader to a file that is not there. Four clauses follow from that:
   `.agents/fissile.toml` (§FS-001-config.8) keeps its config where the default
   no longer looks. Naming the literal would send the reader to a file the run
   did not touch.
-- Step 2 reports the hook the run leaves behind (§6), not the flag it was
+- Step 2 reports the hook the run leaves behind (§FS-002-init.6), not the flag it was
   given: a managed block there — this run's, or an earlier run's that
   `--no-hook` declined to touch — earns the invitation above.
 - With no such block, step 2 says what to do instead, and `--no-hook` answers
   first when both apply: `--no-hook skipped the managed hook; wire fissile
   check --staged into your commit flow — a hook manager or core.hooksPath, if
-  this repo uses one.` Outside a git repository (§6) the step is the repair —
+  this repo uses one.` Outside a git repository (§FS-002-init.6) the step is the repair —
   `Run git init && fissile init to install the pre-commit hook, or wire fissile
   check --staged into your commit flow.` Neither asserts a hook manager: `init`
   looks for none, and `--no-hook` is equally the flag of a reader who wants no
   hook at all.
 - The closing `see <path> for what agents are told; the findings carry the
-  rest.` line names an agent entrypoint this run handled (§3), not a fixed
+  rest.` line names an agent entrypoint this run handled (§FS-002-init.3), not a fixed
   filename: automatic mode
   updates whichever entrypoints already exist and only falls back to
   `AGENTS.md` when none do, and the per-agent flags select the file directly.
@@ -276,8 +276,8 @@ fissile check --staged || exit 1
   without the block, `init` appends the block and preserves prior content. When
   it exists with a supported block version, `init` replaces only the block,
   preserving bytes before and after. A newer unsupported block version is a
-  schema error that leaves the file unchanged, exactly as in §4.
-- **Reporting.** The hook path uses the same prefixes as §5
+  schema error that leaves the file unchanged, exactly as in §FS-002-init.4.
+- **Reporting.** The hook path uses the same prefixes as §FS-002-init.5
   (`wrote`/`appended`/`updated`/`exists`) and honors `--dry-run`.
 
 `init` targets the repository's own `hooks/pre-commit` only. A repository that

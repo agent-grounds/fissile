@@ -97,7 +97,7 @@ configured step, so the ceiling cannot look like it came from a coincidentally
 equal rule limit. A stated `--max` is written as it is; when it is not a multiple
 of the step, the result names the next multiple — the round number the measured
 form would have chosen — as a suggestion, omitted when that number is one the
-command would refuse (§4):
+command would refuse (§FS-008-exception-retune.4):
 
 ```text
 docs/file-size-human-exceptions.toml: src/order.rs 500 -> 501 lines (next 100-line step: 600)

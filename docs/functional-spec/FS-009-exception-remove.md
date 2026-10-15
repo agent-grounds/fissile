@@ -32,7 +32,7 @@ and the error says there is nothing to remove and then lists the entries the
 addressed registry does hold — path, matcher, rules and ceiling, one per line,
 cut off with a count of the rest when the registry is long. It lists them itself
 rather than sending the caller to `audit --stale-exceptions`: `remove` is the
-one command that reads a registry the rule check rejects (§2), so in the state
+one command that reads a registry the rule check rejects (§FS-009-exception-remove.2), so in the state
 this command exists for it is the only one that can answer the question it just
 raised (§DF-007-instructions-at-the-error-site).
 
@@ -74,10 +74,10 @@ the second stage and nothing of the first, with one repair-only exception: an
 otherwise well-formed soft entry whose `shadows = "hard"` target is absent must
 remain addressable by `exception remove --severity soft`. That command may carry
 the unresolved entry only far enough to apply the usual address, removal, and
-byte-preserving write (§4); it deletes the entry, exits zero, and reports the
+byte-preserving write (§FS-009-exception-remove.4); it deletes the entry, exits zero, and reports the
 normal removal. This remains a repair when the path is above the soft limit:
 the orphan cannot silence a finding because ordinary loading aborts before
-evaluation, so §3 does not preserve it.
+evaluation, so §FS-009-exception-remove.3 does not preserve it.
 
 The exception does not resolve the orphan or make it valid. `check`, `audit`,
 the hook, every other command, and a removal from any registry other than the
@@ -97,7 +97,7 @@ first, and no command — this one included — will do it.
 
 Two of the rule-check failures stay out of reach for a different reason: the
 address takes its rule ids and its unit from the command line, and the unit from
-a *configured* rule (§1). So an entry whose only rule ids are ones the config no
+a *configured* rule (§FS-009-exception-remove.1). So an entry whose only rule ids are ones the config no
 longer configures, and an entry whose `max_accepted.unit` no configured rule it
 names shares, answer to no address this command can be given — a retired id is
 refused before the registry is read, and a live id addresses a different
@@ -117,7 +117,7 @@ deleting one leaves the verdict on every other exactly as it stood. A registry
 holding several failing entries is therefore repaired one command at a time,
 which is why the guarantee on the write is stated as what it actually is — the
 document written back holds precisely the entries that were read, less the one
-addressed (§5) — rather than as "the result validates".
+addressed (§FS-009-exception-remove.5) — rather than as "the result validates".
 
 ## 3. An entry that still silences a finding is not removed
 
@@ -201,7 +201,7 @@ writes nothing.
 
 `remove` fails without writing when no entry answers the address, when the
 address matches more than one, when the address only overlaps an entry in either
-direction (§1), and when the entry still silences a finding (§3).
+direction (§FS-009-exception-remove.1), and when the entry still silences a finding (§FS-009-exception-remove.3).
 
 Before the write, the document about to be written is parsed and compared against
 the entries the command read: it must hold precisely those, less the one
