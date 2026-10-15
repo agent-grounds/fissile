@@ -8,6 +8,30 @@ fn read(relative: &str) -> String {
     fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()))
 }
 
+fn grund_config() -> toml::Value {
+    read("grund.toml").parse().expect("valid grund.toml")
+}
+
+fn assert_required_grund_policy(table: &str, setting: &str) {
+    let config = grund_config();
+    match config
+        .get("grund_config_version")
+        .and_then(toml::Value::as_integer)
+    {
+        Some(1) => assert_eq!(
+            config
+                .get(table)
+                .and_then(|table| table.get(setting))
+                .and_then(toml::Value::as_bool),
+            Some(true),
+            "grund.toml v1 must explicitly set [{table}] {setting} = true"
+        ),
+        // Grund 0.18.0 guarantees both policies in v2 without legacy keys.
+        Some(2) => {}
+        version => panic!("unsupported grund_config_version: {version:?}; expected 1 or 2"),
+    }
+}
+
 fn assert_grund_install_version(relative: &str) {
     let text = read(relative);
     let installs: Vec<_> = text
@@ -33,7 +57,7 @@ fn assert_grund_install_version(relative: &str) {
 
 #[test]
 fn repository_grund_config_is_v2() {
-    let config: toml::Value = read("grund.toml").parse().expect("valid grund.toml");
+    let config = grund_config();
     assert_eq!(
         config
             .get("grund_config_version")
@@ -41,6 +65,18 @@ fn repository_grund_config_is_v2() {
         Some(2),
         "grund.toml must use grund_config_version = 2"
     );
+}
+
+/// Grounding requires marked citations (§AR-001-ci.2).
+#[test]
+fn repository_grounding_requires_marked_citations() {
+    assert_required_grund_policy("reference", "strict");
+}
+
+/// Grounding recognizes named sections (§AR-001-ci.2).
+#[test]
+fn repository_grounding_recognizes_named_sections() {
+    assert_required_grund_policy("id", "named_sections");
 }
 
 #[test]
