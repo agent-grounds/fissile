@@ -9,7 +9,7 @@ use crate::config::Bump;
 use crate::entry;
 use crate::exceptions::{Exception, ExceptionError, Kind, Registries, Verdict};
 use crate::json::Json;
-use crate::staged_history::SoftEdit;
+use crate::staged_history::{EditSource, SoftEdit};
 use crate::{
     Checker, FileMeasurement, FissileError, Overflow, RuleHit, Severity, Unit, render_overflow,
 };
@@ -516,7 +516,7 @@ impl<'a> Group<'a> {
 /// Greedy word wrap at `columns`, measured in characters. Explicit newlines in
 /// the message are kept as paragraph breaks; a word longer than `columns` (a
 /// path, a URL) takes its own line rather than being broken.
-fn wrap(text: &str, columns: usize) -> Vec<String> {
+pub(crate) fn wrap(text: &str, columns: usize) -> Vec<String> {
     let mut lines = Vec::new();
 
     for paragraph in text.lines() {
@@ -596,6 +596,12 @@ pub(crate) fn overflow_json_with_staged_context(
         if edit.promoted() {
             fields.push(("promotion", Json::str("soft_edit_limit")));
         }
+        // The split a reader of the text sees, for a consumer of the JSON
+        // (§FS-004-check-audit.1.3, §FS-004-check-audit.1.4).
+        if let EditSource::Committed { before, .. } = &edit.source {
+            fields.push(("soft_edit_source", Json::str("committed")));
+            fields.push(("soft_edit_before_base", Json::UInt(*before)));
+        }
     }
     match outcome {
         Outcome::Reported(_) => {
@@ -627,6 +633,14 @@ fn soft_edit_clause(edit: &SoftEdit) -> String {
     if edit.promoted() {
         clause.push_str("; promoted to blocking");
     }
+    if let EditSource::Committed {
+        base,
+        before,
+        branch,
+    } = &edit.source
+    {
+        return committed_edit_clause(clause, edit, base, *before, *branch);
+    }
     let prior_edits = edit.count - 1;
     if !edit.history_complete {
         return format!(
@@ -643,6 +657,36 @@ fn soft_edit_clause(edit: &SoftEdit) -> String {
         clause.push_str("; this staged edit first reaches the promotion limit");
     } else if edit.count > edit.limit {
         clause.push_str("; prior committed edits already reached the promotion limit");
+    }
+    clause
+}
+
+/// The committed split of a base run (§FS-004-check-audit.1.4). Nothing here
+/// subtracts from the count, which may be `0` when history is incomplete.
+fn committed_edit_clause(
+    mut clause: String,
+    edit: &SoftEdit,
+    base: &str,
+    before: u64,
+    branch: u64,
+) -> String {
+    let split =
+        format!("{before} committed over-soft edits before {base} + {branch} on this branch");
+    if !edit.history_complete {
+        return format!(
+            "{clause}; history incomplete; promotion disabled; at least {split} established"
+        );
+    }
+    clause.push_str(&format!("; {split}"));
+    if before == 0 {
+        clause.push_str("; this branch starts the over-soft run");
+    }
+    if edit.promoted() && before < edit.limit {
+        clause.push_str("; this branch first reaches the promotion limit");
+    } else if edit.promoted() {
+        clause.push_str(&format!(
+            "; edits before {base} already reached the promotion limit"
+        ));
     }
     clause
 }

@@ -43,17 +43,21 @@ examples:
   fissile init --exceptions
   fissile init . --agents-md --claude";
 
-/// Distinguishes history-backed staged checks from working-tree snapshots
-/// (§FS-004-check-audit.1.4).
+/// Distinguishes the history-backed staged and base checks from working-tree
+/// snapshots (§FS-004-check-audit.1.4), and names the three input modes as
+/// exclusive (§FS-004-check-audit.1.5).
 pub const CHECK_USAGE: &str = "\
-usage: fissile check [<paths>...] [--staged] [--config <path>]
+usage: fissile check [<paths>...] [--staged | --base <ref>] [--config <path>]
                      [--format text|json] [--no-color]
 
+Paths, --staged and --base <ref> are exclusive input modes.
 --staged checks index bytes and Git history;
+--base <ref> checks the files changed in <ref>..HEAD, at HEAD, and Git history;
 paths and plain check use working-tree snapshots.
 
 examples:
   fissile check --staged
+  fissile check --base origin/main
   fissile check src/lib.rs --format json";
 
 pub const MEASURE_USAGE: &str = "\

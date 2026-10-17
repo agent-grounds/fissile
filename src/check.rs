@@ -1,9 +1,12 @@
 //! `fissile check` (§FS-004-check-audit.1): the commit-time gate. Measures a
-//! file set — git-staged, caller-passed, or the configured scan scope — applies
-//! the rules and exception registries, and emits findings in text or JSON.
+//! file set — git-staged, the commits since a base (§FS-004-check-audit.1.5),
+//! caller-passed, or the configured scan scope — applies the rules and
+//! exception registries, and emits findings in text or JSON. Every mode runs
+//! one pipeline; they differ in selection, measurement, and history.
 
 use std::path::PathBuf;
 
+use crate::base::{self, Range, Selection};
 use crate::cli::{self, CommandError, Format, Loaded};
 use crate::exceptions::{Exception, MatchKind};
 use crate::json::Json;
@@ -22,6 +25,21 @@ pub struct CheckOptions {
     pub no_color: bool,
     /// Caller-passed repo-relative paths; empty means "use the scan scope".
     pub paths: Vec<String>,
+}
+
+/// Inputs to a `check --base <ref>` run (§FS-004-check-audit.1.5): the files
+/// changed between `<ref>` and `HEAD`, measured from `HEAD`'s blobs, with soft
+/// edits counted per commit (§FS-004-check-audit.1.4).
+#[derive(Clone, Debug)]
+pub struct BaseCheckOptions {
+    pub root: PathBuf,
+    pub config_path: Option<PathBuf>,
+    /// `<ref>`: one revision expression naming an ancestor of `HEAD`, passed to
+    /// Git as data. It must not be empty.
+    pub base: String,
+    pub format: Option<Format>,
+    /// Force plain text output regardless of `[output].color` (§FS-001-config.6).
+    pub no_color: bool,
 }
 
 /// The result of a `check` run: rendered output, whether it fails the build,
@@ -48,17 +66,89 @@ enum Blocked {
     DeadEntry,
 }
 
+/// Which file set a run judges, and so how it measures and what history it
+/// spends (§FS-004-check-audit.1).
+enum Mode<'a> {
+    /// Caller-passed paths, or the scan scope when there are none.
+    Snapshot(&'a [String]),
+    Staged,
+    Base(&'a str),
+}
+
+/// What a base run resolved before measuring anything (§FS-004-check-audit.1.5).
+struct BaseInput {
+    range: Range,
+    selection: Selection,
+}
+
+/// Run `check` over the staged set, caller-passed paths, or the scan scope.
 pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
-    let (loaded, soft_edit_limits) =
-        cli::load_with_soft_edit_limits(&options.root, options.config_path.as_deref())?;
-    let files = collect_files(options, &loaded)?;
-    let format = options
-        .format
-        .unwrap_or_else(|| loaded.config.output.format.into());
+    let mode = if options.staged {
+        Mode::Staged
+    } else {
+        Mode::Snapshot(&options.paths)
+    };
+    run_mode(
+        &options.root,
+        options.config_path.as_deref(),
+        options.format,
+        options.no_color,
+        &mode,
+    )
+}
+
+/// Run `check --base <ref>` (§FS-004-check-audit.1.5). An endpoint or selection
+/// it cannot resolve is a run-level error, exit `2` (§FS-004-check-audit.5).
+pub fn run_base(options: &BaseCheckOptions) -> Result<Run, CommandError> {
+    run_mode(
+        &options.root,
+        options.config_path.as_deref(),
+        options.format,
+        options.no_color,
+        &Mode::Base(&options.base),
+    )
+}
+
+fn run_mode(
+    root: &std::path::Path,
+    config_path: Option<&std::path::Path>,
+    format: Option<Format>,
+    no_color: bool,
+    mode: &Mode<'_>,
+) -> Result<Run, CommandError> {
+    let (loaded, soft_edit_limits) = cli::load_with_soft_edit_limits(root, config_path)?;
+    let base = match mode {
+        Mode::Base(expression) => {
+            let range = base::resolve(&loaded.root, expression)?;
+            let selection = base::select(&loaded.root, &range, &loaded.config.scan)?;
+            Some(BaseInput { range, selection })
+        }
+        Mode::Snapshot(_) | Mode::Staged => None,
+    };
+    let staged = matches!(mode, Mode::Staged);
+    let files = match (&base, mode) {
+        (Some(base), _) => base
+            .selection
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect(),
+        (None, Mode::Snapshot(paths)) => collect_files(&loaded, false, paths)?,
+        (None, _) => collect_files(&loaded, staged, &[])?,
+    };
+    let format = format.unwrap_or_else(|| loaded.config.output.format.into());
 
     // A path that cannot be measured is skipped, not fatal: one odd file must not
     // hide every other finding (§FS-004-check-audit.5).
-    let (measured_files, errors) = cli::measure_each_with_context(&loaded, options.staged, &files);
+    let (measured_files, errors) = match &base {
+        // `HEAD`'s blobs, whatever the index or working tree holds (§FS-004-check-audit.1.5).
+        Some(base) => {
+            base::measure_each(&loaded.root, &base.selection.files, &loaded.config.tokens)
+        }
+        None => cli::measure_each_with_context(&loaded, staged, &files),
+    };
+    // Only the Git-selected modes prove and spend edit history (§DF-013-bounded-soft-grace.1).
+    let spends_grace = staged || base.is_some();
     let mut contexts = Vec::new();
     let mut outcomes = Vec::new();
     let mut history_candidates = Vec::new();
@@ -75,7 +165,7 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
             &loaded.config.exceptions.bump,
         ));
         let file_outcomes = report::evaluate_hits(&loaded.registries, measurement, &hits)?;
-        if options.staged {
+        if spends_grace {
             for overflow in file_outcomes
                 .iter()
                 .filter(|outcome| outcome.is_reported())
@@ -110,16 +200,24 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
         }
         outcomes.extend(file_outcomes);
     }
-    let soft_edits = if options.staged {
-        staged_history::derive(&loaded.root, &loaded.config.tokens, &history_candidates)
-    } else {
-        Vec::new()
+    let soft_edits = match &base {
+        Some(base) => staged_history::derive_committed(
+            &loaded.root,
+            &loaded.config.tokens,
+            &history_candidates,
+            &base.range,
+        ),
+        None if staged => {
+            staged_history::derive(&loaded.root, &loaded.config.tokens, &history_candidates)
+        }
+        None => Vec::new(),
     };
 
     // An exact-path entry this run's file set proves is gone accepts nothing,
     // and the commit that removed the file is where that is worth saying
     // (§FS-004-check-audit.1.3).
-    let stale = stale_entries(options, &loaded, &files)?;
+    let removed = base.as_ref().map(|base| base.selection.removed.as_slice());
+    let stale = stale_entries(mode, removed, &loaded, &files)?;
     let blocked = if report::has_hard_failure(&outcomes) {
         Blocked::Overflow
     } else if report::has_soft_edit_promotion(&soft_edits) {
@@ -129,20 +227,25 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
     } else {
         Blocked::No
     };
+    let gate = match mode {
+        Mode::Staged => Gate::Staged,
+        Mode::Base(expression) => Gate::Base(expression),
+        Mode::Snapshot(_) => Gate::None,
+    };
 
     // Discovery decided which document governs this run; the note saying so is
     // owed before anything it found (§FS-001-config.8.2).
     let mut notes = cli::config_notes(&loaded.source);
     let (output, stale_notes) = match format {
         Format::Text => {
-            let color = cli::use_color(loaded.config.output.color, options.no_color, format);
+            let color = cli::use_color(loaded.config.output.color, no_color, format);
             let text = Text {
                 outcomes: &outcomes,
                 contexts: &contexts,
                 stale: &stale,
                 success: &loaded.config.output.success,
                 color,
-                staged: options.staged,
+                gate,
                 blocked,
                 has_errors: !errors.is_empty(),
             };
@@ -169,7 +272,8 @@ pub fn run(options: &CheckOptions) -> Result<Run, CommandError> {
 /// (§FS-004-check-audit.1.3). Absence from the working tree is not that proof:
 /// an unbuilt file, or an unstaged deletion, has outlived no entry.
 fn stale_entries<'a>(
-    options: &CheckOptions,
+    mode: &Mode<'_>,
+    removed: Option<&[String]>,
     loaded: &'a Loaded,
     files: &[String],
 ) -> Result<Vec<&'a Exception>, CommandError> {
@@ -184,20 +288,24 @@ fn stale_entries<'a>(
         return Ok(Vec::new());
     }
 
-    if options.staged {
-        // The commit is what removes the file, and it is the thing being judged.
-        let removed = scan::staged_removals(&loaded.root)?;
-        return Ok(loaded
+    let removed_by = |removed: &[String]| {
+        loaded
             .registries
             .all()
             .filter(exact)
             .filter(|entry| removed.contains(&entry.path))
-            .collect());
-    }
-    // Caller-passed paths are a window, not an inventory: they prove nothing
-    // about an entry that names some other file.
-    if !options.paths.is_empty() {
-        return Ok(Vec::new());
+            .collect()
+    };
+    match mode {
+        // The commit is what removes the file, and it is the thing being judged.
+        Mode::Staged => return Ok(removed_by(&scan::staged_removals(&loaded.root)?)),
+        // A range of commits proves what it removed the same way: in `<ref>`'s
+        // tree and not in `HEAD`'s.
+        Mode::Base(_) => return Ok(removed_by(removed.unwrap_or_default())),
+        // Caller-passed paths are a window, not an inventory: they prove nothing
+        // about an entry that names some other file.
+        Mode::Snapshot(paths) if !paths.is_empty() => return Ok(Vec::new()),
+        Mode::Snapshot(_) => {}
     }
     // The whole inventory, the one §FS-004-check-audit.2 compares against — but a
     // path the scope excludes or git ignores is missing from it while sitting
@@ -211,16 +319,31 @@ fn stale_entries<'a>(
         .collect())
 }
 
-fn collect_files(options: &CheckOptions, loaded: &Loaded) -> Result<Vec<String>, CommandError> {
-    match cli::selected_files(loaded, options.staged, &options.paths)? {
+fn collect_files(
+    loaded: &Loaded,
+    staged: bool,
+    paths: &[String],
+) -> Result<Vec<String>, CommandError> {
+    match cli::selected_files(loaded, staged, paths)? {
         Some(files) => Ok(files),
         // Neither `--staged` nor explicit paths: the configured scan scope.
         None => Ok(scan::walk_scope(&loaded.root, &loaded.config.scan)?),
     }
 }
 
+/// Which verdict a failing run closes with an epilogue for
+/// (§FS-004-check-audit.1.2): a staged commit, a branch against its base, or
+/// none for a snapshot.
+#[derive(Clone, Copy)]
+enum Gate<'a> {
+    None,
+    Staged,
+    /// `<ref>` as the caller typed it.
+    Base(&'a str),
+}
+
 /// What one text render needs: the findings, what the registries no longer
-/// accept, whether this run is a commit, and why it is blocked
+/// accept, which gate this run is, and why it is blocked
 /// (§FS-004-check-audit.1).
 struct Text<'a> {
     outcomes: &'a [Outcome],
@@ -228,7 +351,7 @@ struct Text<'a> {
     stale: &'a [&'a Exception],
     success: &'a str,
     color: bool,
-    staged: bool,
+    gate: Gate<'a>,
     blocked: Blocked,
     has_errors: bool,
 }
@@ -259,9 +382,19 @@ fn render_text_with_soft_edits(text: &Text<'_>, soft_edits: &[SoftEdit]) -> Stri
         blocks.push(report::MEASURE_HINT.to_owned());
     }
     blocks.extend(report::stale_blocks(text.stale, text.color));
-    // Only `--staged` is a commit, and it closes by saying what to do about
-    // whatever blocked it (§FS-004-check-audit.1.2).
-    if text.staged {
+    // `--staged` and `--base` close by saying what to do about whatever blocked
+    // them (§FS-004-check-audit.1.2); only `--staged` is a commit.
+    if let Gate::Base(expression) = text.gate {
+        let reason = match text.blocked {
+            Blocked::No if text.has_errors => Some(base::Reason::Unmeasured),
+            Blocked::No => None,
+            Blocked::Overflow => Some(base::Reason::Overflow),
+            Blocked::PromotedSoft => Some(base::Reason::PromotedSoft),
+            Blocked::DeadEntry => Some(base::Reason::DeadEntry),
+        };
+        blocks.extend(reason.map(|reason| base::epilogue(expression, reason)));
+    }
+    if let Gate::Staged = text.gate {
         match text.blocked {
             // Nothing stands against the files that were measured, but one this
             // commit stages could not be: exit 2 aborts the commit all the same,
@@ -307,7 +440,7 @@ mod tests {
             stale: &[],
             success: "ok",
             color: false,
-            staged: true,
+            gate: Gate::Staged,
             blocked: Blocked::No,
             has_errors: true,
         };

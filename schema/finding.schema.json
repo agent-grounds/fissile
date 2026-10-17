@@ -19,7 +19,9 @@
     "soft_edit_count": ["soft_edit_limit", "soft_edit_history_complete"],
     "soft_edit_limit": ["soft_edit_count", "soft_edit_history_complete"],
     "soft_edit_history_complete": ["soft_edit_count", "soft_edit_limit"],
-    "promotion": ["soft_edit_count", "soft_edit_limit", "soft_edit_history_complete"]
+    "promotion": ["soft_edit_count", "soft_edit_limit", "soft_edit_history_complete"],
+    "soft_edit_source": ["soft_edit_count", "soft_edit_limit", "soft_edit_history_complete", "soft_edit_before_base"],
+    "soft_edit_before_base": ["soft_edit_source"]
   },
   "allOf": [
     {
@@ -34,6 +36,10 @@
           "soft_edit_history_complete": { "const": true }
         }
       }
+    },
+    {
+      "if": { "not": { "required": ["soft_edit_source"] } },
+      "then": { "properties": { "soft_edit_count": { "minimum": 1 } } }
     }
   ],
   "properties": {
@@ -59,7 +65,7 @@
     "severity": {
       "type": "string",
       "enum": ["soft", "hard"],
-      "description": "`hard` fails the commit; `soft` warns unless a staged history-proven edit count reaches its soft edit limit (GOAL-006-graded-limits, FS-004-check-audit.1.4)."
+      "description": "`hard` fails the commit; `soft` warns unless a staged or base history-proven edit count reaches its soft edit limit (GOAL-006-graded-limits, FS-004-check-audit.1.4)."
     },
     "rule_id": {
       "type": "string",
@@ -85,13 +91,13 @@
     },
     "soft_edit_count": {
       "type": "integer",
-      "minimum": 1,
-      "description": "The current staged edit plus the proven continuous committed over-soft edits for this rule. Present only on staged soft findings (FS-004-check-audit.1.4)."
+      "minimum": 0,
+      "description": "On a staged soft finding, the current staged edit plus the proven continuous committed over-soft edits for this rule, at least 1. On a base soft finding (`soft_edit_source` present), the committed edits alone, which is 0 only when history is incomplete. Present only on staged and base soft findings (FS-004-check-audit.1.4)."
     },
     "soft_edit_limit": {
       "type": "integer",
       "minimum": 1,
-      "description": "The effective per-rule count at which a history-complete staged soft finding blocks. Present only on staged soft findings (FS-004-check-audit.1.4)."
+      "description": "The effective per-rule count at which a history-complete staged or base soft finding blocks. Present only on staged and base soft findings (FS-004-check-audit.1.4)."
     },
     "soft_edit_history_complete": {
       "type": "boolean",
@@ -99,7 +105,16 @@
     },
     "promotion": {
       "const": "soft_edit_limit",
-      "description": "Present only when a history-complete staged soft finding reached its edit limit and therefore blocks (FS-004-check-audit.1.4)."
+      "description": "Present only when a history-complete staged or base soft finding reached its edit limit and therefore blocks (FS-004-check-audit.1.4)."
+    },
+    "soft_edit_source": {
+      "const": "committed",
+      "description": "Present only on `fissile check --base <ref>` soft findings: the count is committed edits alone, with no staged edit (FS-004-check-audit.1.4, FS-004-check-audit.1.5)."
+    },
+    "soft_edit_before_base": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Present only with `soft_edit_source`: how many counted edits are reachable from `<ref>`. The branch's share is `soft_edit_count - soft_edit_before_base` (FS-004-check-audit.1.4)."
     }
   }
 }

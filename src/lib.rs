@@ -8,6 +8,7 @@ use std::cmp::Ordering;
 use std::path::Path;
 
 pub mod audit;
+mod base;
 pub mod check;
 pub mod cli;
 mod comments;
@@ -29,6 +30,7 @@ mod model;
 pub mod remove;
 pub mod report;
 pub mod retune;
+mod revision;
 pub mod scan;
 mod staged_history;
 mod toml_lines;

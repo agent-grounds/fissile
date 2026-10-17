@@ -1,4 +1,6 @@
-//! Git-history proof for bounded staged soft debt (§FS-004-check-audit.1.4).
+//! Git-history proof for bounded soft debt, staged or committed
+//! (§FS-004-check-audit.1.4). Both modes share one walk; they differ only in
+//! where it starts and in what the count is seeded with.
 //!
 //! History stays command-side: the public checker remains a snapshot engine.
 //! Each distinct path uses one rename-following log, while every historical
@@ -43,6 +45,22 @@ pub(crate) struct SoftEdit {
     pub count: u64,
     pub limit: u64,
     pub history_complete: bool,
+    pub source: EditSource,
+}
+
+/// Where the counted edits came from (§FS-004-check-audit.1.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum EditSource {
+    /// One staged edit plus the committed run behind it.
+    Staged,
+    /// Committed edits alone, split at the base: `before` are reachable from
+    /// `<ref>` (`base`, as typed), `branch` are on `<ref>..HEAD`. The count is
+    /// their sum; neither is derived from it.
+    Committed {
+        base: String,
+        before: u64,
+        branch: u64,
+    },
 }
 
 impl SoftEdit {
@@ -79,6 +97,7 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
             count: 1,
             limit: candidate.edit_limit,
             history_complete: false,
+            source: EditSource::Staged,
         })
         .collect();
     if candidates.is_empty() {
@@ -100,7 +119,7 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
             Some(Seed::Absent) => {}
             Some(Seed::Path(path)) => {
                 if !logs.contains_key(path) && !log_failed.contains(path) {
-                    match file_log(root, path) {
+                    match file_log(root, None, path) {
                         Ok(records) => {
                             logs.insert(path.clone(), records);
                         }
@@ -131,65 +150,167 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
             continue;
         };
 
-        let mut frontier = (!records.is_empty())
-            .then_some(0)
-            .into_iter()
-            .collect::<Vec<_>>();
-        let mut visited = HashSet::new();
-        let mut ancestry = Ancestry::new(root);
-        let mut closed_frontiers = 0usize;
-        let mut proof_failed = false;
-        while let Some(index) = frontier.pop() {
-            if !visited.insert(index) {
-                continue;
-            }
-            let record = &records[index];
-            if !record.provable {
-                proof_failed = true;
-                break;
-            }
-            // A shallow boundary's apparent add is a synthetic root diff. Its
-            // parent is unavailable, so neither the edit nor a reset is proven.
-            if shallow.contains(&record.commit) {
-                proof_failed = true;
-                break;
-            }
-            if !candidate.applies_to(&record.path) {
-                closed_frontiers += 1;
-                continue;
-            }
-            let Some(blob) = &record.blob else {
-                closed_frontiers += 1;
-                continue;
-            };
-            let Ok(Some(measurement)) = measurements.measure(blob, &record.path) else {
-                proof_failed = true;
-                break;
-            };
-            let Some(actual) = measured_value(candidate, &measurement) else {
-                proof_failed = true;
-                break;
-            };
-            if actual <= candidate.soft_limit {
-                closed_frontiers += 1;
-                continue;
-            }
-            result.count += 1;
-            if record.establishes_absence {
-                closed_frontiers += 1;
-                continue;
-            }
-            let predecessors = direct_predecessors(records, index, &mut ancestry);
-            if predecessors.is_empty() {
-                proof_failed = true;
-                break;
-            }
-            frontier.extend(predecessors);
-        }
-        result.history_complete = !proof_failed && closed_frontiers > 0 && frontier.is_empty();
+        let walked = walk(root, candidate, records, &shallow, &mut measurements);
+        result.count += walked.counted.len() as u64;
+        result.history_complete = walked.complete;
     }
 
     results
+}
+
+/// Derive committed edits for a `check --base <ref>` run (§FS-004-check-audit.1.4).
+/// The count is seeded with `0` — nothing is staged — and each walk starts at
+/// the commit `HEAD` resolved to, so the selection and the count read one
+/// commit. Every counted commit is split by whether it is on `<ref>..HEAD`; the
+/// base never stops the walk. Fails open exactly as [`derive`] does.
+pub(crate) fn derive_committed(
+    root: &Path,
+    tokens: &Tokens,
+    candidates: &[Candidate],
+    range: &crate::base::Range,
+) -> Vec<SoftEdit> {
+    let committed = |before, branch| EditSource::Committed {
+        base: range.expression.clone(),
+        before,
+        branch,
+    };
+    let mut results: Vec<SoftEdit> = candidates
+        .iter()
+        .map(|candidate| SoftEdit {
+            path: candidate.path.clone(),
+            rule_id: candidate.rule_id.clone(),
+            unit: candidate.unit,
+            count: 0,
+            limit: candidate.edit_limit,
+            history_complete: false,
+            source: committed(0, 0),
+        })
+        .collect();
+    if candidates.is_empty() {
+        return results;
+    }
+    let Ok(shallow) = shallow_commits(root) else {
+        return results;
+    };
+    let Ok(on_branch) = branch_commits(root, range) else {
+        return results;
+    };
+    let mut logs: BTreeMap<String, Option<Vec<Record>>> = BTreeMap::new();
+    let mut measurements = HistoryMeasurer::new(root, tokens);
+
+    for (candidate, result) in candidates.iter().zip(&mut results) {
+        let current = candidate.path.to_string_lossy().replace('\\', "/");
+        let records = logs
+            .entry(current.clone())
+            .or_insert_with(|| file_log(root, Some(&range.head), &current).ok());
+        let Some(records) = records else {
+            continue;
+        };
+        let walked = walk(root, candidate, records, &shallow, &mut measurements);
+        let (branch, before): (Vec<_>, Vec<_>) = walked
+            .counted
+            .iter()
+            .partition(|commit| on_branch.contains(*commit));
+        result.count = walked.counted.len() as u64;
+        result.history_complete = walked.complete;
+        result.source = committed(before.len() as u64, branch.len() as u64);
+    }
+
+    results
+}
+
+/// The commits on `<ref>..HEAD`, by full SHA.
+fn branch_commits(root: &Path, range: &crate::base::Range) -> io::Result<HashSet<String>> {
+    let span = format!("{}..{}", range.base, range.head);
+    let output = crate::revision::git(root, &["rev-list", &span, "--"])?;
+    if !output.status.success() {
+        return Err(io::Error::other("git rev-list failed"));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect())
+}
+
+/// What one walk proved: the commits whose over-soft versions it counted, and
+/// whether every parent line closed on a version at or below soft, out of the
+/// rule's scope, or a proven absence.
+struct Walked {
+    counted: Vec<String>,
+    complete: bool,
+}
+
+/// Walk one candidate's rename-following log newest to oldest, counting each
+/// path-changing commit once across every reachable parent line
+/// (§FS-004-check-audit.1.4). Unprovable continuity, a shallow boundary, or a
+/// failed measurement stops the walk with what it counted as a lower bound.
+fn walk(
+    root: &Path,
+    candidate: &Candidate,
+    records: &[Record],
+    shallow: &HashSet<String>,
+    measurements: &mut HistoryMeasurer<'_>,
+) -> Walked {
+    let mut counted = Vec::new();
+    let mut frontier = (!records.is_empty())
+        .then_some(0)
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut visited = HashSet::new();
+    let mut ancestry = Ancestry::new(root);
+    let mut closed_frontiers = 0usize;
+    let mut proof_failed = false;
+    while let Some(index) = frontier.pop() {
+        if !visited.insert(index) {
+            continue;
+        }
+        let record = &records[index];
+        if !record.provable {
+            proof_failed = true;
+            break;
+        }
+        // A shallow boundary's apparent add is a synthetic root diff. Its
+        // parent is unavailable, so neither the edit nor a reset is proven.
+        if shallow.contains(&record.commit) {
+            proof_failed = true;
+            break;
+        }
+        if !candidate.applies_to(&record.path) {
+            closed_frontiers += 1;
+            continue;
+        }
+        let Some(blob) = &record.blob else {
+            closed_frontiers += 1;
+            continue;
+        };
+        let Ok(Some(measurement)) = measurements.measure(blob, &record.path) else {
+            proof_failed = true;
+            break;
+        };
+        let Some(actual) = measured_value(candidate, &measurement) else {
+            proof_failed = true;
+            break;
+        };
+        if actual <= candidate.soft_limit {
+            closed_frontiers += 1;
+            continue;
+        }
+        counted.push(record.commit.clone());
+        if record.establishes_absence {
+            closed_frontiers += 1;
+            continue;
+        }
+        let predecessors = direct_predecessors(records, index, &mut ancestry);
+        if predecessors.is_empty() {
+            proof_failed = true;
+            break;
+        }
+        frontier.extend(predecessors);
+    }
+    Walked {
+        complete: !proof_failed && closed_frontiers > 0 && frontier.is_empty(),
+        counted,
+    }
 }
 
 /// Nearest older path-changing commits on every reachable parent line. A
@@ -299,10 +420,11 @@ fn staged_seeds(root: &Path) -> io::Result<HashMap<String, Seed>> {
     Ok(seeds)
 }
 
-/// Complete reachable history in topological order. `-m` exposes one merge diff
-/// per changed parent; [`parse_log`] uses those parent views to distinguish an
-/// importing merge from a resolution that introduced a new version.
-fn file_log(root: &Path, path: &str) -> io::Result<Vec<Record>> {
+/// Complete reachable history in topological order, from `start` or else the
+/// symbolic `HEAD`. `-m` exposes one merge diff per changed parent;
+/// [`parse_log`] uses those parent views to distinguish an importing merge from
+/// a resolution that introduced a new version.
+fn file_log(root: &Path, start: Option<&str>, path: &str) -> io::Result<Vec<Record>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
@@ -318,9 +440,9 @@ fn file_log(root: &Path, path: &str) -> io::Result<Vec<Record>> {
             "--format=format:%x1e%H%x00%P%x00",
             "--raw",
             "-z",
-            "--",
-            path,
         ])
+        .args(start)
+        .args(["--", path])
         .output()?;
     if !output.status.success() {
         return Err(io::Error::other("git log --follow failed"));

@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use std::slice::Iter;
 
 use fissile::audit::{self, AuditOptions, Section};
-use fissile::check::{self, CheckOptions};
+use fissile::check::{self, BaseCheckOptions, CheckOptions};
 use fissile::cli::Format;
 use fissile::init::{self, AgentTargets, HookMode, InitOptions};
 use fissile::limits::{self, LimitsOptions};
@@ -139,6 +139,8 @@ fn run_init(args: &[String]) -> ExitCode {
 struct FileSetArgs {
     config_path: Option<PathBuf>,
     staged: bool,
+    /// `check --base <ref>`; only `check` parses it (§FS-004-check-audit.1.5).
+    base: Option<String>,
     format: Option<Format>,
     no_color: bool,
     paths: Vec<String>,
@@ -160,6 +162,17 @@ fn parse_file_set(
                 return Ok(None);
             }
             "--staged" => parsed.staged = true,
+            "--base" if command == "check" => {
+                let message = match iter.next() {
+                    _ if parsed.base.is_some() => "--base given more than once",
+                    Some(base) if !base.is_empty() => {
+                        parsed.base = Some(base.clone());
+                        continue;
+                    }
+                    _ => "--base requires a value",
+                };
+                return Err(usage_fail(command, message, usage));
+            }
             "--no-color" => parsed.no_color = true,
             "--config" => match value(&mut iter, "--config") {
                 Ok(path) => parsed.config_path = Some(PathBuf::from(path)),
@@ -179,6 +192,19 @@ fn parse_file_set(
             other => parsed.paths.push(other.to_owned()),
         }
     }
+    // The three input modes are exclusive (§FS-004-check-audit.1.5).
+    if parsed.base.is_some() {
+        let conflict = if parsed.staged {
+            Some("--base conflicts with --staged")
+        } else if !parsed.paths.is_empty() {
+            Some("--base conflicts with paths")
+        } else {
+            None
+        };
+        if let Some(message) = conflict {
+            return Err(usage_fail(command, message, usage));
+        }
+    }
     Ok(Some(parsed))
 }
 
@@ -188,16 +214,25 @@ fn run_check(args: &[String]) -> ExitCode {
         Ok(None) => return ExitCode::SUCCESS,
         Err(code) => return code,
     };
-    let options = CheckOptions {
-        root: PathBuf::from("."),
-        config_path: parsed.config_path,
-        staged: parsed.staged,
-        format: parsed.format,
-        no_color: parsed.no_color,
-        paths: parsed.paths,
+    let result = match parsed.base {
+        Some(base) => check::run_base(&BaseCheckOptions {
+            root: PathBuf::from("."),
+            config_path: parsed.config_path,
+            base,
+            format: parsed.format,
+            no_color: parsed.no_color,
+        }),
+        None => check::run(&CheckOptions {
+            root: PathBuf::from("."),
+            config_path: parsed.config_path,
+            staged: parsed.staged,
+            format: parsed.format,
+            no_color: parsed.no_color,
+            paths: parsed.paths,
+        }),
     };
 
-    match check::run(&options) {
+    match result {
         // Under `--format json` stdout is holding a machine shape, so the run's
         // account of a registry it can no longer read comes out on stderr rather
         // than being lost (§FS-004-check-audit.5).

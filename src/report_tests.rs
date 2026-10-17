@@ -470,3 +470,59 @@ fn the_ceiling_reads_the_configured_step_for_each_unit() {
         assert!(block.ends_with(&format!("    {detail}")), "{block}");
     }
 }
+
+/// A base run's soft edit, `before` reachable from `main` and `branch` on
+/// `main..HEAD` (§FS-004-check-audit.1.4).
+fn committed_edit(before: u64, branch: u64, complete: bool) -> SoftEdit {
+    SoftEdit {
+        path: std::path::PathBuf::from("docs/spec.md"),
+        rule_id: "spec".to_owned(),
+        unit: Unit::Lines,
+        count: before + branch,
+        limit: 5,
+        history_complete: complete,
+        source: EditSource::Committed {
+            base: "main".to_owned(),
+            before,
+            branch,
+        },
+    }
+}
+
+#[test]
+fn committed_clause_names_the_split_and_each_boundary() {
+    assert_eq!(
+        soft_edit_clause(&committed_edit(4, 2, true)),
+        "soft edits 6/5; promoted to blocking; 4 committed over-soft edits before main + 2 on this branch; this branch first reaches the promotion limit"
+    );
+    assert_eq!(
+        soft_edit_clause(&committed_edit(6, 1, true)),
+        "soft edits 7/5; promoted to blocking; 6 committed over-soft edits before main + 1 on this branch; edits before main already reached the promotion limit"
+    );
+    assert_eq!(
+        soft_edit_clause(&committed_edit(0, 1, true)),
+        "soft edits 1/5; 0 committed over-soft edits before main + 1 on this branch; this branch starts the over-soft run"
+    );
+    assert_eq!(
+        soft_edit_clause(&committed_edit(0, 5, true)),
+        "soft edits 5/5; promoted to blocking; 0 committed over-soft edits before main + 5 on this branch; this branch starts the over-soft run; this branch first reaches the promotion limit"
+    );
+    assert_eq!(
+        soft_edit_clause(&committed_edit(2, 1, true)),
+        "soft edits 3/5; 2 committed over-soft edits before main + 1 on this branch"
+    );
+}
+
+/// A zero count never reaches the staged path's `count - 1`, and incomplete
+/// history states lower bounds without a boundary clause.
+#[test]
+fn committed_clause_with_incomplete_history_states_lower_bounds() {
+    assert_eq!(
+        soft_edit_clause(&committed_edit(0, 0, false)),
+        "soft edits 0/5; history incomplete; promotion disabled; at least 0 committed over-soft edits before main + 0 on this branch established"
+    );
+    assert_eq!(
+        soft_edit_clause(&committed_edit(5, 1, false)),
+        "soft edits 6/5; history incomplete; promotion disabled; at least 5 committed over-soft edits before main + 1 on this branch established"
+    );
+}
