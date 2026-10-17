@@ -98,9 +98,9 @@ guessing which document broke (§GOAL-003-friendly-output.1).
 - `respect_gitignore`: whether repository ignore files participate in traversal,
   default `true`.
 
-Pre-commit checks receive their file set from git and do not use `include`, but
-they still apply `exclude` so generated assets and lockfiles stay out of the
-budget system.
+Pre-commit checks and `check --base <ref>` receive their file set from git and
+do not use `include` or gitignore, but they still apply `exclude` so generated
+assets and lockfiles stay out of the budget system (§FS-004-check-audit.1.5).
 
 Both `exclude` and `respect_gitignore` prune the walk rather than filter its
 result: an excluded or ignored directory is never descended into. This is a
@@ -121,7 +121,7 @@ Rules are declared as `[[rules]]` entries. Each rule has:
 - `unit`: `bytes`, `lines`, or `tokens`;
 - `soft`: optional warning threshold;
 - `soft_edit_limit`: optional number of continuous over-soft edits allowed before
-  a staged soft finding blocks, default `5`;
+  a staged or base soft finding blocks, default `5`;
 - `hard`: optional blocking threshold;
 - `priority`: optional integer tie-breaker, default `0`;
 - `message`: the ID of a `[[messages]]` template, used for both severities;
@@ -138,9 +138,9 @@ hard limit reports only the hard overflow; the soft overflow is implied
 configs written before the field existed. `fissile init` and the maintained
 example write it explicitly on every rule with a soft threshold, like every
 other default (§DF-002-explicit-config). The setting affects only the bounded
-staged-edit grace in §FS-004-check-audit.1.4; it does not add a third size
-threshold or change what `check` without `--staged`, `audit`, or the library
-checker considers soft or hard.
+edit grace of `check --staged` and `check --base` in §FS-004-check-audit.1.4; it does not add
+a third size threshold or change what any other `check`, `audit`, or the
+library checker considers soft or hard.
 
 Rule IDs are user-facing names, not incidental labels. They should read like
 bundle-size entries: `rust-source`, `api-docs`, `fixtures`, `generated-rust`.
