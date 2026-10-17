@@ -21,9 +21,10 @@ fissile measure <paths>... [--staged] [--config <path>]
 
 Either explicit paths or `--staged` is required; there is no whole-repo default.
 "These files" is `measure`; "the whole repository" is `audit --top`
-(§FS-004-check-audit.2). Selection matches `check` exactly: `--staged` takes the
-file set from git and applies `[scan].exclude`, explicit paths are measured as
-passed (§FS-004-check-audit.1).
+(§FS-004-check-audit.2). Selection matches `check` exactly in the modes both have: `--staged`
+takes the file set from git and applies `[scan].exclude`, explicit paths are
+measured as passed (§FS-004-check-audit.1). `measure` has no `--base`: a branch's
+verdict is `check --base` (§FS-004-check-audit.1.5).
 
 `measure` is an inspection surface, not a gate. It exits `0` whatever it finds,
 including a file over a hard limit. Only a run-level failure or an unmeasurable

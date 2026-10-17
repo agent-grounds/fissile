@@ -8,14 +8,16 @@ resolution, exclusions, messages, and exception registries.
 ## 1. Check
 
 ```text
-fissile check [<paths>...] [--staged] [--config <path>] [--format text|json] [--no-color]
+fissile check [<paths>...] [--staged | --base <ref>] [--config <path>] [--format text|json] [--no-color]
 ```
 
 `check --staged` receives the file set from git and applies `[scan].exclude`.
+`check --base <ref>` receives it from the commits between `<ref>` and `HEAD`,
+applies the same exclusions, and measures `HEAD`'s blobs (§FS-004-check-audit.1.5).
 Without `--staged`, `check` evaluates the paths passed by the caller or the
 configured scan scope. A file strictly above a soft limit produces a finding
 and exits `0` unless a matching soft exception applies; equality passes. On
-`check --staged`, a history-proven continuous run of over-soft edits can promote
+`check --staged` and `check --base <ref>`, a history-proven continuous run of over-soft edits can promote
 that soft finding into a commit block (§FS-004-check-audit.1.4). A file strictly above a hard limit
 produces a finding and exits non-zero unless a matching hard exception applies;
 equality passes. Severity and promotion are not invocation-time knobs.
@@ -23,7 +25,7 @@ This is the stable CI/pre-commit contract: the same invocation mode, selected
 content, config, and available history must produce the same pass/fail result
 locally and remotely (§GOAL-003-friendly-output). Equal index and working-tree
 bytes do not make a staged invocation and a snapshot invocation equivalent:
-only the staged invocation proves and spends edit history (§FS-004-check-audit.1.4).
+only the staged and base invocations prove and spend edit history (§FS-004-check-audit.1.4).
 
 Text findings are grouped, one block per `(severity, rule, rendered guidance)`.
 The header names the severity, the file count, the crossed limit, the rule, and
@@ -182,8 +184,27 @@ A run blocked by more than one leads with the overflow, then the dead entry: the
 split is the largest thing to do, and each block is on screen above the epilogue
 either way.
 
-Only `--staged` prints an epilogue, and it describes only that command's
-verdict. The same findings from a CI run or a manual `fissile check src/` do
+A `check --base <ref>` run that exits non-zero closes the same way, for the same
+reasons and in the same order, but nothing is staged and no commit is being
+made, so its epilogue claims neither. The lead stands on its own line, `<ref>`
+as the caller typed it, and the reason's remedy follows wrapped at 78 columns:
+
+```text
+`fissile check --base <ref>` rejected the selected HEAD files.
+```
+
+- a hard overflow: `Split the file, or ask a human for a reviewed hard exception.`
+- a promoted soft overflow: ``Split now or record the debt with `fissile
+  exception add <path> --severity soft --rule <rule> --kind <kind>`.``
+- a dead entry: `Remove the exception entry above, or point it at the path its
+  file moved to.`
+- an unmeasurable file: `A selected file could not be measured, so nothing above
+  accounts for it — fix the path the error names.`
+
+No base epilogue names `--no-verify`, the hook, or unstaging.
+
+Only `--staged` and `--base` print an epilogue, and each describes only that
+command's verdict. The same findings from a CI run or a manual `fissile check src/` do
 not gain staged semantics. Because `--staged` can be run manually or outside
 the actual commit hook, the generic epilogues make hook bypass conditional;
 the promoted-soft epilogue states exactly which hook invocation enforces its
@@ -206,7 +227,7 @@ Entries are reported under `[exceptions].stale`: `warn` reports them, `error`
 also fails the run — and through the pre-commit hook, blocks the commit (§FS-004-check-audit.1.2) —
 `ignore` says nothing (§FS-003-exceptions.4).
 
-`check` reports only what its file set proves, and its three file sets prove
+`check` reports only what its file set proves, and its four file sets prove
 different things:
 
 - **`--staged`** is a commit, and a commit proves what it removes: the entry is
@@ -216,6 +237,9 @@ different things:
   inventory, so an entry matching nothing in it is stale by §FS-004-check-audit.2's comparison,
   provided no file stands at its path: one the scope excludes or git ignores is
   right where the entry says, and §FS-004-check-audit.2 reports it without blocking a build.
+- **`--base <ref>`** is a range of commits and proves removals the same way: an
+  entry is reported when its path is in `<ref>`'s tree and not in `HEAD`'s, a
+  deletion or a rename away from it on the branch.
 - **Caller-passed paths** are a window, not an inventory, and prove nothing
   about an entry naming some other file. Nothing is reported.
 
@@ -249,7 +273,9 @@ JSON output emits one record per overflow with at least:
 A staged soft finding additionally carries `soft_edit_count`,
 `soft_edit_limit`, and `soft_edit_history_complete`. A promoted one retains
 `"severity":"soft"` and adds `"promotion":"soft_edit_limit"`; a true hard
-size overflow carries none of those fields. This keeps the exception route and
+size overflow carries none of those fields. A base soft finding carries the same
+fields plus `"soft_edit_source":"committed"` and `soft_edit_before_base`
+(§FS-004-check-audit.1.4); a staged finding gains neither. This keeps the exception route and
 the reason for the blocking exit machine-visible without misreporting a soft
 overflow as a hard-size overflow (§FS-004-check-audit.1.4).
 
@@ -351,6 +377,86 @@ structural hard exception continues to silence it. A matching soft exception is
 applied before edit promotion and silences the finding both below and at or
 above the edit limit. Thus the same repository decision retires repeated soft
 debt before and after it becomes commit-blocking (§DF-013-bounded-soft-grace).
+
+`check --base <ref>` spends the same grace over committed edits alone
+(§FS-004-check-audit.1.5), under every rule above except the first: there is no
+staged edit, so the count starts at `0`. The walk starts at the commit `HEAD`
+resolved to, not the symbolic `HEAD`, so selection and count read one commit.
+Each counted commit is either reachable from `<ref>` — *before the base* — or on
+`<ref>..HEAD` — *on this branch*. The base splits the count and bounds the
+selection; it never resets the run, which only a version at or below soft does.
+A commit whose parents are unavailable, as at a shallow clone's boundary, is not
+counted, since nothing proves it introduced a distinct version. Four over-soft
+edits before the base and two on the branch count `6`; a branch whose first edit
+shrinks the file to its soft limit and whose second crosses again counts `1`.
+
+The detail reads `soft edits <count>/<limit>`, `; promoted to blocking` when
+promoted, then with complete history `; <before> committed over-soft edits
+before <ref> + <branch> on this branch`, `<ref>` as typed, followed in this order
+by each boundary clause that applies:
+
+- `<before>` is `0`: `; this branch starts the over-soft run`.
+- Promoted with `<before>` below the limit: `; this branch first reaches the
+  promotion limit`.
+- Promoted with `<before>` at or above it: `; edits before <ref> already
+  reached the promotion limit`.
+
+Incomplete history reads `; history incomplete; promotion disabled; at least
+<before> committed over-soft edits before <ref> + <branch> on this branch
+established`, with no boundary clause. Either number may be `0`; neither is
+derived by subtracting from the count. JSON carries the staged trio,
+`"soft_edit_source":"committed"`, and `soft_edit_before_base`, which is
+`<before>`; the branch's share is `soft_edit_count - soft_edit_before_base`. A
+`soft_edit_count` of `0` occurs only on such a record with incomplete history.
+
+### 1.5 Checking a branch against a base
+
+`check --base <ref>` asks the commit gate's question of a whole branch: do its
+net changes, as they stand at `HEAD`, pass the budgets and the grace the hook
+would apply.
+
+`<ref>` is one revision expression naming a commit — a branch, a remote-tracking
+ref, a tag, a SHA — passed to Git as data, never as an option. It and `HEAD`
+each resolve once, to full commit SHAs. A range such as `a..b`, an expression
+that names no commit, an unborn `HEAD`, a run outside a Git work tree, missing
+objects, or a `<ref>` not proven to be an ancestor of `HEAD` exits `2` with one
+`fissile check: --base <ref>:` diagnostic naming the cause. Equality is allowed.
+fissile never fetches: a missing ref is told to fetch it, and a divergent base
+is given the fork point to use instead:
+
+```text
+fissile check: --base other: <sha> is not an ancestor of HEAD <sha>; to check against the fork point, run fissile check --base "$(git merge-base other HEAD)"
+```
+
+The selected files are the paths whose entries differ between `<ref>`'s tree and
+`HEAD`'s, compared directly and never through a merge-base: additions,
+modifications, type changes, and rename destinations. Type changes are included
+on purpose — `--staged` filters `ACMR`, but a link turned into a file is new
+content at `HEAD`. Gitlinks (mode `160000`) are skipped, since a submodule
+pointer has no content to measure. `[scan].exclude` applies; `[scan].include`
+and gitignore do not (§FS-001-config.2). Deletions and rename sources are not
+measured; they prove stale entries (§FS-004-check-audit.1.3). An empty selection prints the
+success marker, or `[]`, and exits `0`.
+
+Each selected file is measured from its blob at `HEAD`, whatever the index or
+working tree holds, under the current checkout's effective config and
+registries, discovered or named by `--config`; historical policy is not
+replayed. The run reads Git objects only and leaves the index, the working
+tree, and every ref as it found them.
+
+`--base` takes one non-empty value, once, and conflicts with `--staged` and with
+paths. Each misuse is a usage error printed above check's usage, exit `2`:
+`--base requires a value`, `--base given more than once`, `--base conflicts
+with --staged`, `--base conflicts with paths`. No other command accepts it.
+
+The promise is an endpoint verdict, not a replay of every hook that ran. A
+violation repaired before `HEAD` passes, and a file whose edits were reverted
+out of the net diff is not selected; what is selected is counted per commit,
+never as one squashed edit (§FS-004-check-audit.1.4). A pull-request job checks out full history
+and passes the event's base commit, not `origin/main`, which can move between
+the event and the checkout. The library exposes the mode as `BaseCheckOptions {
+root, config_path, base, format, no_color }` and `check::run_base`, beside an
+unchanged `CheckOptions` and `check::run`.
 
 ## 2. Audit
 
@@ -539,7 +645,8 @@ and the same selectable/renderable section as `Section::History`, last in
 the CLI. These are additive public Rust fields and variants in a pre-1.0 crate,
 so callers using struct literals or exhaustive matches must update.
 
-This mode belongs only to `audit`. `check` has no history option, and an `audit`
+This mode belongs only to `audit`. `check --base <ref>` (§FS-004-check-audit.1.5) judges `HEAD`
+under today's policy and never compares two committed snapshots, and an `audit`
 without `--history` does no revision resolution, Git walk, historical checkout,
 or rename detection. Its stdout, stderr, and exit behavior are byte-for-byte the
 same as before this section existed. The ordinary current-state sections of a
@@ -744,6 +851,11 @@ A run with file-level failures exits `2` even when no finding stands — silentl
 passing an unmeasurable file would make the gate unsound — and the text success
 marker is withheld. JSON output never carries error records: stdout keeps the
 stable findings shape (§GOAL-003-friendly-output.1) and stderr owns diagnostics.
+
+`check --base` follows the same split. An endpoint or selection it cannot resolve
+is run-level and exits `2` (§FS-004-check-audit.1.5); a selected `HEAD` blob it cannot measure is
+file-level; history that ends too soon is neither, only advisory evidence
+(§FS-004-check-audit.1.4).
 
 Non-UTF-8 content is not an error: line budgets measure physical lines from raw
 bytes (§FS-001-config.3.1).

@@ -55,6 +55,21 @@ fn issue_74_check_help_distinguishes_staged_history_from_snapshot_checks() {
     }
 }
 
+/// §FS-006-cli.2: check's screen names `--base <ref>` as a third, exclusive input
+/// mode and shows a branch example, still within one screen.
+#[test]
+fn issue_92_check_help_shows_the_base_mode() {
+    let text = help(&["check", "--help"]);
+    let lines = text.lines().count();
+    assert!(lines <= MAX_HELP_LINES, "check help has {lines} lines");
+    for clause in [
+        "[--staged | --base <ref>]",
+        "fissile check --base origin/main",
+    ] {
+        assert!(text.contains(clause), "check help should state `{clause}`");
+    }
+}
+
 /// §FS-006-cli.2: each `exception` subcommand carries its own one-screen usage,
 /// so the shared screen stays a dispatcher rather than growing two flag lists.
 #[test]

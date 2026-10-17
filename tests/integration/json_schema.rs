@@ -130,6 +130,18 @@ fn schema_declares_every_finding_field() {
     assert!(audit.contains("finding.schema.json"));
 }
 
+/// Provenance only base soft findings carry (§FS-004-check-audit.1.4).
+#[test]
+fn schema_declares_the_base_soft_edit_fields() {
+    let finding = fs::read_to_string(schema_dir().join("finding.schema.json")).unwrap();
+    for field in ["soft_edit_source", "soft_edit_before_base"] {
+        assert!(
+            finding.contains(&format!("\"{field}\"")),
+            "schema/finding.schema.json is missing field `{field}`"
+        );
+    }
+}
+
 #[test]
 fn check_json_records_match_the_schema() {
     let root = temp_repo();

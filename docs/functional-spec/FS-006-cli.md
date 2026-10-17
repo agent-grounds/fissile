@@ -26,6 +26,9 @@ and exits `0`.
 `--help`/`-h` at the top level prints the usage screen; after a command it
 prints that command's usage with compact examples. Every help screen fits in 24
 lines (§GOAL-003-friendly-output.1) and the bound is enforced by a test.
+`check`'s screen names its three input modes as exclusive — paths, `--staged`,
+`--base <ref>` — and carries a `fissile check --base origin/main` example
+(§FS-004-check-audit.1.5).
 
 The top-level screen carries one short paragraph above the command list saying
 what `fissile` is for and how to work with it: the two tiers, the

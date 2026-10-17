@@ -11,6 +11,9 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+mod base_promotion;
+mod base_selection;
+mod base_support;
 // Unix-only: its fixture compares canonical paths, which Windows prefixes with `\\?\`.
 #[cfg(unix)]
 mod empty_scan;

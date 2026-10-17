@@ -36,10 +36,13 @@ contract: a file over budget is *fissile* because it is ready to split under its
 accumulated mass (§DF-001-tool-name). Each overflow can also carry a short, project-configured
 message suggesting how this repository prefers such a file to be split, but that guidance is
 help layered on top, not the point (§GOAL-008-remediation-messages). The CLI runs in
-two modes:
+three modes:
 
 - as a **pre-commit hook** that checks staged files and refuses the commit when a hard budget
   is exceeded, with a configured message that explains the local architectural remedy;
+- as a **branch check** that judges the files a branch changed against its base,
+  as they stand at its head, with the grace the hook spends, so a rebase or a
+  pull-request job gets the hook's verdict without staging anything;
 - as an **audit subcommand** that scans the whole repo and reports current offenders, so a
   team can adopt the tool against an existing codebase without immediately blocking work.
 

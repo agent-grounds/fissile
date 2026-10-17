@@ -9,10 +9,11 @@ would remove the grace; leaving all of them advisory would preserve the drift.
 ## 1. Decision
 
 Each soft rule has a configurable edit limit, defaulting to five. Only `check
---staged` spends it. The staged edit and each committed edit in the continuous
-run since the file crossed the soft limit count; a committed version at or below
-soft resets the run. Earlier edits warn, and the edit at the limit promotes the
-soft finding into a commit block (§FS-004-check-audit.1.4).
+--staged` and `check --base <ref>` spend it. The staged edit and each committed
+edit in the continuous run since the file crossed the soft limit count; a
+committed version at or below soft resets the run. Earlier edits warn, and the
+edit at the limit promotes the soft finding into a commit block
+(§FS-004-check-audit.1.4).
 
 Caller-selected paths, plain no-path checks, audit, and the library checker do
 not inherit promotion. They are potentially divergent, Git-free snapshots:
@@ -20,7 +21,14 @@ they may read working-tree bytes that differ from the index, and a path-list
 invocation does not prove that its caller is a commit hook. Equal bytes in one
 run do not supply either missing fact. Keeping those surfaces snapshot-only
 preserves their exit status and cost while reserving grace accounting for the
-invocation that selects the index and proves its history.
+invocations that select from Git and prove their history.
+
+`check --base <ref>` answers both halves of that reason. It reads only Git
+objects — the files changed between `<ref>` and `HEAD`, as they stand at `HEAD` —
+so it cannot diverge from what was committed; and it is an explicit opt-in, so
+no caller that chose snapshot semantics gains a blocking exit. It counts the
+committed edits once per commit, with no staged edit, and the base bounds what
+is judged without resetting the run (§FS-004-check-audit.1.4, §FS-004-check-audit.1.5).
 
 Promotion changes consequence, not ownership. The finding remains soft debt,
 uses the soft message, and is silenced by the soft registry. A true hard-size
@@ -62,6 +70,16 @@ decision.
 working-tree snapshot from the index and can run without Git. Walking history
 would not make that selection equivalent to `--staged`, and would silently add
 blocking exits and repository work to callers that chose snapshot semantics.
+The base mode is not this alternative: it selects from Git objects and is
+requested by its own flag.
+
+**Count a branch as one squashed edit.** Replaying `<ref>..HEAD` as one staged
+diff is one edit, but the hook that ran on each of its commits saw one edit per
+commit, so the squashed count passes files the per-commit hook blocked.
+
+**Replay every hook on the branch.** Judging each intermediate commit would block
+a branch for a violation it repaired before `HEAD`. The base mode gives the
+endpoint verdict instead: the net changes at `HEAD`, counted per commit.
 
 **Use the hard exception route after promotion.** Edit age does not turn the
 file into a hard-size overflow. Requiring human-reviewed hard debt would make
