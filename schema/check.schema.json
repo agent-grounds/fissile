@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/agent-grounds/fissile/schema/check.schema.json",
   "title": "fissile check output",
-  "description": "`fissile check --format json` (FS-004-check-audit.1, GOAL-004-token-thrift.1): a flat array of standing finding records, one per violation, sorted deterministically. An empty array means a clean check.",
+  "description": "`fissile check --format json` (FS-004-check-audit.1, GOAL-004-token-thrift.1): a flat array of standing finding records, one per violation, sorted deterministically. An empty array means a clean check. Staged and base runs (`--staged`, `--base <ref>`, FS-004-check-audit.1.5) add soft-edit provenance to soft records; only base records carry `soft_edit_source` and `soft_edit_before_base`.",
   "type": "array",
   "items": { "$ref": "finding.schema.json" }
 }

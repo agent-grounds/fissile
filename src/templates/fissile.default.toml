@@ -8,10 +8,11 @@
 fissile_config_version = 1
 
 [scan]
-# `audit` walks these roots; `check --staged` ignores them and takes its file
-# set from git. Both honor `exclude` and `.gitignore`. The default walks the
-# whole repository so adoption needs no layout guess; narrow it to specific
-# roots once you know which directories are worth auditing.
+# `audit` walks these roots, honoring `exclude` and `.gitignore`; `check
+# --staged` and `check --base` take their file set from git and apply only
+# `exclude`. The default walks the whole repository so adoption needs no
+# layout guess; narrow it to specific roots once you know which directories are
+# worth auditing.
 include = ["."]
 exclude = [
   "target/**",

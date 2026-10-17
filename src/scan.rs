@@ -481,13 +481,24 @@ pub(crate) fn measure_history_blob(
     bytes: &[u8],
     tokens: &Tokens,
 ) -> io::Result<FileMeasurement> {
+    Ok(measure_blob_with_context(root, rel, bytes, tokens)?.measurement)
+}
+
+/// The same measurement keeping its encoding, for a `HEAD` blob a base run
+/// renders (§FS-004-check-audit.1.5).
+pub(crate) fn measure_blob_with_context(
+    root: &Path,
+    rel: &str,
+    bytes: &[u8],
+    tokens: &Tokens,
+) -> io::Result<MeasuredFile> {
     let mut measured = measure_content(rel, bytes);
     if tokens.enabled
         && let Some(count) = run_token_command_for_staged_bytes(root, &tokens.command, rel, bytes)?
     {
         measured.measurement = measured.measurement.with_tokens(count);
     }
-    Ok(measured.measurement)
+    Ok(measured)
 }
 
 /// Physical lines in arbitrary bytes: `\n` count plus an unterminated tail.

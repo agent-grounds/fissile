@@ -5,10 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{HistoryError, Revision};
+use crate::revision;
 
 static SCRATCH: AtomicUsize = AtomicUsize::new(0);
 
@@ -43,30 +43,22 @@ pub(crate) enum RenameKind {
 
 impl Repository<'_> {
     pub fn open<'a>(root: &'a Path, range: &'a str) -> Result<Repository<'a>, HistoryError> {
-        let output = Command::new("git")
-            .arg("-C")
-            .arg(root)
-            .args(["rev-parse", "--is-inside-work-tree"])
-            .output()
-            .map_err(|_| HistoryError::new(range, "not a Git work tree"))?;
-        if !output.status.success() || output.stdout != b"true\n" {
+        if !revision::inside_work_tree(root).unwrap_or(false) {
             return Err(HistoryError::new(range, "not a Git work tree"));
         }
         Ok(Repository { root, range })
     }
 
     pub fn resolve(&self, expression: &str) -> Result<String, HistoryError> {
-        // `--end-of-options` makes a caller-controlled revision data, never an
-        // option (§FS-004-check-audit.2.1).
-        let requested = format!("{expression}^{{commit}}");
-        let output = self.run(&["rev-parse", "--verify", "--end-of-options", &requested])?;
-        if !output.status.success() {
-            return Err(HistoryError::new(
-                self.range,
-                format!("revision `{expression}` does not resolve to a commit"),
-            ));
-        }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        // The expression is passed as data, never as an option (§FS-004-check-audit.2.1).
+        revision::resolve_commit(self.root, expression)
+            .map_err(|error| self.unavailable(&error))?
+            .ok_or_else(|| {
+                HistoryError::new(
+                    self.range,
+                    format!("revision `{expression}` does not resolve to a commit"),
+                )
+            })
     }
 
     pub fn require_ancestor(
@@ -75,8 +67,7 @@ impl Repository<'_> {
         from: &str,
         to: &str,
     ) -> Result<(), HistoryError> {
-        let output = self.run(&["merge-base", "--is-ancestor", "--", from, to])?;
-        if !output.status.success() {
+        if !revision::is_ancestor(self.root, from, to).map_err(|error| self.unavailable(&error))? {
             return Err(HistoryError::new(
                 self.range,
                 format!(
@@ -247,12 +238,11 @@ impl Repository<'_> {
     }
 
     fn run(&self, args: &[&str]) -> Result<std::process::Output, HistoryError> {
-        Command::new("git")
-            .arg("-C")
-            .arg(self.root)
-            .args(args)
-            .output()
-            .map_err(|error| HistoryError::new(self.range, format!("Git is unavailable: {error}")))
+        revision::git(self.root, args).map_err(|error| self.unavailable(&error))
+    }
+
+    fn unavailable(&self, error: &io::Error) -> HistoryError {
+        HistoryError::new(self.range, format!("Git is unavailable: {error}"))
     }
 
     fn at(&self, revision: &str, cause: impl Into<String>) -> HistoryError {

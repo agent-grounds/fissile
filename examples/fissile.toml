@@ -8,8 +8,8 @@
 fissile_config_version = 1
 
 [scan]
-# `check --staged` ignores this and receives its file set from git. `audit`
-# walks these roots.
+# `check --staged` and `check --base` ignore this and receive their file set
+# from git. `audit` walks these roots.
 include = ["src", "tests", "benches", "docs", "e2e", "README.md", "CLAUDE.md"]
 exclude = [
   "target/**",

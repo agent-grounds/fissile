@@ -91,6 +91,33 @@ the local hook is (§FS-002-init.6):
       pass_filenames: false
 ```
 
+### Checking a whole branch
+
+After a rebase, or in a pull-request job where nothing is staged, ask the hook's
+question of every commit since a base instead (§FS-004-check-audit.1.5):
+
+```console
+$ fissile check --base origin/main
+```
+
+It judges the files changed between the base and `HEAD`, as they stand at
+`HEAD`, under the current checkout's config, and counts soft edits once per
+commit the way the hook did — splitting the count into the edits before the base
+and those on the branch (§FS-004-check-audit.1.4). It is an endpoint verdict: a
+violation repaired before `HEAD` passes. The base must be an ancestor of `HEAD`,
+and fissile never fetches. In CI, check out full history and pass the event's
+base commit rather than `origin/main`, which can move between the event and the
+checkout:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- run: fissile check --base "${{ github.event.pull_request.base.sha }}"
+```
+
+On a pull request's merge ref, `fissile check --base HEAD^1` names the same base.
+
 The starter config ships sensible defaults — a byte budget on everything, a
 line budget on common source extensions (`.rs`, `.go`, `.py`, `.ts`, `.js`, …)
 wherever they live, and a markdown budget — all editable in place.
@@ -466,6 +493,8 @@ from earlier version-1 configs.
   the git hook (§FS-002-init).
 - **`check --staged`** — the index-and-history commit gate, including bounded
   soft-edit promotion (§FS-004-check-audit.1.4).
+- **`check --base <ref>`** — the same gate over the commits since `<ref>`,
+  measured at `HEAD` (§FS-004-check-audit.1.5).
 - **`check [<paths>...]`** — working-tree snapshot checks; explicit paths and
   the plain scan do not inspect or spend Git history (§FS-004-check-audit.1.4).
 - **`measure`** — what fissile counts for a file, and the headroom left
