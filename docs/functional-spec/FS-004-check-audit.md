@@ -428,6 +428,10 @@ is given the fork point to use instead:
 fissile check: --base other: <sha> is not an ancestor of HEAD <sha>; to check against the fork point, run fissile check --base "$(git merge-base other HEAD)"
 ```
 
+A shallow clone cannot tell divergence from a cut history, so its diagnostic
+says ancestry cannot be proven in a shallow clone and asks for full history
+(`git fetch --unshallow`, or `fetch-depth: 0` in CI) instead of a fork point.
+
 The selected files are the paths whose entries differ between `<ref>`'s tree and
 `HEAD`'s, compared directly and never through a merge-base: additions,
 modifications, type changes, and rename destinations. Type changes are included
