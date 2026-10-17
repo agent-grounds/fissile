@@ -249,11 +249,34 @@ fn assert_promoted_record_matches_closed_schema(output: &str) {
         assert!(properties.contains_key(key), "schema misses {key}");
     }
     assert_eq!(properties["soft_edit_count"]["type"], "integer");
-    assert_eq!(properties["soft_edit_count"]["minimum"], 1);
+    // Only a base record may carry 0 (§FS-004-check-audit.1.4): the floor of 1
+    // returns through the branches keyed on `soft_edit_source`.
+    assert_eq!(properties["soft_edit_count"]["minimum"], 0);
+    let staged_floor = serde_json::json!({ "not": { "required": ["soft_edit_source"] } });
+    assert_eq!(soft_edit_count_floor(&schema, &staged_floor), Some(1));
+    let base_complete_floor = serde_json::json!({
+        "required": ["soft_edit_source", "soft_edit_history_complete"],
+        "properties": { "soft_edit_history_complete": { "const": true } }
+    });
+    assert_eq!(
+        soft_edit_count_floor(&schema, &base_complete_floor),
+        Some(1)
+    );
     assert_eq!(properties["soft_edit_limit"]["type"], "integer");
     assert_eq!(properties["soft_edit_limit"]["minimum"], 1);
     assert_eq!(properties["soft_edit_history_complete"]["type"], "boolean");
     assert_eq!(properties["promotion"]["const"], "soft_edit_limit");
+}
+
+/// The `soft_edit_count` minimum the schema's `allOf` branch with exactly this
+/// `if` imposes, if there is one.
+fn soft_edit_count_floor(schema: &serde_json::Value, condition: &serde_json::Value) -> Option<i64> {
+    schema["allOf"]
+        .as_array()?
+        .iter()
+        .find(|branch| branch["if"] == *condition)?["then"]["properties"]["soft_edit_count"]
+        ["minimum"]
+        .as_i64()
 }
 
 fn message_block<'a>(config: &'a str, id: &str) -> &'a str {
