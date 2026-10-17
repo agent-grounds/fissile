@@ -40,6 +40,13 @@
     {
       "if": { "not": { "required": ["soft_edit_source"] } },
       "then": { "properties": { "soft_edit_count": { "minimum": 1 } } }
+    },
+    {
+      "if": {
+        "required": ["soft_edit_source", "soft_edit_history_complete"],
+        "properties": { "soft_edit_history_complete": { "const": true } }
+      },
+      "then": { "properties": { "soft_edit_count": { "minimum": 1 } } }
     }
   ],
   "properties": {
