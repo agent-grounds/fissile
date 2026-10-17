@@ -48,6 +48,13 @@ pub(crate) fn names_object(root: &Path, expression: &str) -> io::Result<bool> {
     Ok(output.status.success())
 }
 
+/// Whether `root`'s repository is a shallow clone, whose cut graph can hide an
+/// ancestry that holds. An unanswered probe reads as not shallow.
+pub(crate) fn is_shallow(root: &Path) -> io::Result<bool> {
+    let output = git(root, &["rev-parse", "--is-shallow-repository"])?;
+    Ok(output.status.success() && output.stdout == b"true\n")
+}
+
 /// Whether `ancestor` is reachable from `descendant`, equality included. Both
 /// are resolved SHAs.
 pub(crate) fn is_ancestor(root: &Path, ancestor: &str, descendant: &str) -> io::Result<bool> {

@@ -57,16 +57,32 @@ pub(crate) fn resolve(root: &Path, expression: &str) -> io::Result<Range> {
         return Err(fail(unresolved(root, expression).map_err(git)?));
     };
     if !revision::is_ancestor(root, &base, &head).map_err(git)? {
-        return Err(fail(format!(
-            "{base} is not an ancestor of HEAD {head}; to check against the fork point, \
-             run fissile check --base \"$(git merge-base {expression} HEAD)\""
-        )));
+        return Err(fail(
+            unproven_ancestry(root, expression, &base, &head).map_err(git)?,
+        ));
     }
     Ok(Range {
         expression: expression.to_owned(),
         base,
         head,
     })
+}
+
+/// Why `<ref>` is not proven an ancestor of `HEAD`. A shallow clone cannot tell
+/// a divergent base from a cut graph, and its merge-base may be empty, so it is
+/// told to fetch full history rather than given a fork point
+/// (§FS-004-check-audit.1.5).
+fn unproven_ancestry(root: &Path, expression: &str, base: &str, head: &str) -> io::Result<String> {
+    if revision::is_shallow(root)? {
+        return Ok(format!(
+            "cannot prove {base} an ancestor of HEAD {head} in a shallow clone; fetch full \
+             history (git fetch --unshallow, or fetch-depth: 0 in CI) and run again"
+        ));
+    }
+    Ok(format!(
+        "{base} is not an ancestor of HEAD {head}; to check against the fork point, \
+         run fissile check --base \"$(git merge-base {expression} HEAD)\""
+    ))
 }
 
 /// Why an expression named no single commit: a range, an object that is not a

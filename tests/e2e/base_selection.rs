@@ -4,7 +4,7 @@
 //! today: `--base` is an unknown option, exit 2.
 
 use super::base_support::{
-    branch_after, commit, edit_spec, fissile, folded, init, stderr, stdout, write_lines,
+    Work, branch_after, commit, edit_spec, fissile, folded, init, stderr, stdout, write_lines,
 };
 use super::git;
 
@@ -50,6 +50,53 @@ fn a_divergent_base_exits_2_and_names_the_fork_point() {
     );
     assert!(
         diagnostic.contains(r#"fissile check --base "$(git merge-base other HEAD)""#),
+        "{diagnostic}"
+    );
+}
+
+/// A shallow clone cannot prove an ancestry that holds, and its merge-base is
+/// empty, so the run names the cut history and no fork point
+/// (§FS-004-check-audit.1.5).
+#[test]
+fn a_shallow_clone_names_unproven_ancestry_not_divergence() {
+    let source = branch_after("unproven-ancestry-source", 4);
+    edit_spec(source.path(), 34, "topic edit 1");
+    edit_spec(source.path(), 35, "topic edit 2");
+    let clone = Work::new("unproven-ancestry-clone");
+    let from = source.path().to_str().expect("UTF-8 scratch path");
+    let into = clone.path().to_str().expect("UTF-8 scratch path");
+    // `--no-local` keeps `--depth`, which a plain-path clone would ignore.
+    let clone_args = [
+        "clone",
+        "-q",
+        "--no-local",
+        "--depth=1",
+        "--branch=topic",
+        from,
+        into,
+    ];
+    git(source.path(), &clone_args);
+    let main = "main:refs/remotes/origin/main";
+    git(
+        clone.path(),
+        &["fetch", "-q", "--depth", "1", "origin", main],
+    );
+
+    let output = fissile(clone.path(), &["check", "--base", "origin/main"]);
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    let diagnostic = stderr(&output);
+    assert!(
+        diagnostic.starts_with("fissile check: --base origin/main: cannot prove "),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("in a shallow clone"), "{diagnostic}");
+    assert!(
+        diagnostic.contains("git fetch --unshallow, or fetch-depth: 0 in CI"),
+        "{diagnostic}"
+    );
+    assert!(
+        !diagnostic.contains("is not an ancestor") && !diagnostic.contains("merge-base"),
         "{diagnostic}"
     );
 }
