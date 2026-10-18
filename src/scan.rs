@@ -252,7 +252,13 @@ pub fn staged_files(root: &Path, scan: &Scan) -> io::Result<Vec<String>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"])
+        .args([
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACMR",
+        ])
         .output()?;
     if !output.status.success() {
         // Outside a repository `git diff` falls into no-index mode and blames
