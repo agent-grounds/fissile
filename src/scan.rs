@@ -244,14 +244,15 @@ pub fn git_toplevel(dir: &Path) -> Option<PathBuf> {
     (!top.is_empty()).then(|| PathBuf::from(top))
 }
 
-/// The git-staged file set for `check --staged` (§FS-004-check-audit.1). Deleted
-/// paths are dropped: there is nothing left to measure. Returns the paths with
-/// `[scan].exclude` applied.
+/// The literal git-staged file set shared by `check --staged` and `measure
+/// --staged` (§FS-004-check-audit.1.6). NUL delimiters bypass Git display quoting
+/// and preserve path whitespace. Deleted paths are dropped: there is nothing
+/// left to measure. Returns the paths with `[scan].exclude` applied.
 pub fn staged_files(root: &Path, scan: &Scan) -> io::Result<Vec<String>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
+        .args(["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"])
         .output()?;
     if !output.status.success() {
         // Outside a repository `git diff` falls into no-index mode and blames
@@ -278,10 +279,9 @@ pub fn staged_files(root: &Path, scan: &Scan) -> io::Result<Vec<String>> {
 
     let exclude = compile_globs(&scan.exclude);
     let mut out: Vec<String> = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .filter(|line| !is_excluded(line, &exclude))
+        .split('\0')
+        .filter(|path| !path.is_empty())
+        .filter(|path| !is_excluded(path, &exclude))
         .map(str::to_owned)
         .collect();
     out.sort();
