@@ -11,7 +11,8 @@ resolution, exclusions, messages, and exception registries.
 fissile check [<paths>...] [--staged | --base <ref>] [--config <path>] [--format text|json] [--no-color]
 ```
 
-`check --staged` receives the file set from git and applies `[scan].exclude`.
+`check --staged` receives the file set from git and applies `[scan].exclude`
+(§FS-004-check-audit.1.6).
 `check --base <ref>` receives it from the commits between `<ref>` and `HEAD`,
 applies the same exclusions, and measures `HEAD`'s blobs (§FS-004-check-audit.1.5).
 Without `--staged`, `check` evaluates the paths passed by the caller or the
@@ -461,6 +462,19 @@ and passes the event's base commit, not `origin/main`, which can move between
 the event and the checkout. The library exposes the mode as `BaseCheckOptions {
 root, config_path, base, format, no_color }` and `check::run_base`, beside an
 unchanged `CheckOptions` and `check::run`.
+
+### 1.6 Literal staged paths
+
+The staged file set preserves Git's literal UTF-8 paths, including non-ASCII
+characters, independently of `core.quotePath` or Git's display quoting. A
+display spelling such as `"docs/caf\303\251.md"` must select the indexed
+`docs/café.md`, without treating quotes or escapes as filename characters.
+`[scan].exclude` applies to the literal path, and selected files are measured
+from the index, even when their working-tree contents differ. A file within
+budget passes; one over its hard budget blocks with a finding naming the
+literal path, rather than failing to look up a blob that exists. The same
+selection applies to `measure --staged` (§FS-007-measure.1), which reports the
+literal path and indexed measurement. This does not define non-UTF-8 filenames.
 
 ## 2. Audit
 
