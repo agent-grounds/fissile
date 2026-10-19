@@ -12,12 +12,15 @@ by hand (§AR-001-ci.8.3). Follow a line to its pull request for the detail,
 including the migration steps a breaking change carries. Releases up to 0.11.0
 were written by hand and keep their prose.
 
-## 1. [0.11.1] — 2026-10-05
+## 1. [0.11.2] — 2026-10-19
 
-- [Write release notes from the merged pull requests](https://github.com/agent-grounds/fissile/pull/89) (PR #89)
+- [Measure literal staged paths independently of Git display quoting](https://github.com/agent-grounds/fissile/pull/95) (PR #95)
+- [Judge a branch against its base with check --base \<ref\>, counting soft edits per commit](https://github.com/agent-grounds/fissile/pull/93) (PR #93)
+- [Upgrade grund to 0.18.0 and migrate grounding configuration to v2](https://github.com/agent-grounds/fissile/pull/91) (PR #91)
 
 ## 2. Older releases
 
+- [0.11.1](changelog/0.11.1.md) — 2026-10-05: Write release notes from the merged pull requests
 - [0.11.0](changelog/0.11.0.md) — 2026-10-03: - `clean.sh` at the repository root gives back the disk a checkout's builds took: it runs `cargo clean`, then removes every directory holding a valid `CACHEDIR.TAG`, such as a plan's scratch build under `panta/`.
 - [0.10.1](changelog/0.10.1.md) — 2026-09-21: - §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged failures describe the `fissile check --staged` verdict instead of claiming an unknown commit hook blocked a commit, explain that filename-passing snapshot hooks keep soft findings advisory, and document how hook managers enforce bounded soft-edit promotion.
 - [0.10.0](changelog/0.10.0.md) — 2026-09-14: - The links to the sibling tools now name `agent-grounds`, which `grund` and `rhei` joined after this repository's own move: the `AGENTS.md` and `README.md` pointers to `grund`, and the config-home decision's reference to `rhei`'s matching issue.
