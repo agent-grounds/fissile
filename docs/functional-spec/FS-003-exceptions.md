@@ -260,6 +260,7 @@ same overflow are two severities, not a collision.
 - `max_accepted.value` is a positive integer;
 - `max_accepted.unit` is `bytes`, `lines`, or `tokens`;
 - `max_accepted.unit` matches every rule the entry can silence;
+- every rule checked for an entry has a limit for that registry's severity;
 - `max_accepted.value` is at least the corresponding soft or hard rule limit;
 - `reason` is stated and not empty after trimming whitespace — an omitted field
   and a blank one are one defect, the entry carries no rationale, and are
@@ -273,6 +274,26 @@ same overflow are two severities, not a collision.
   address, whose `reason` and `until` it then carries (§FS-003-exceptions.2.3);
 - every matched path is inside the scan scope unless stale handling is disabled;
 - every stale entry follows `[exceptions].stale`: `warn`, `error`, or `ignore`.
+
+For `rules = ["*"]`, the rule-ID lookup alone is exempt. Validate the severity
+limit and ceiling against every configured rule in `max_accepted.unit` whose
+selector can match a path covered by the entry (§FS-003-exceptions.3), honoring
+the rule's includes and excludes. For `match = "exact"`, use the normalized
+repo-relative entry path. For `match = "glob"`, check whether the entry glob and
+the rule selector have any possible path in common after exclusions, using the
+existing glob syntax. The glob text is not itself a filename; neither today's
+files nor rule precedence narrows this validation set. A rule in another unit
+is outside the set, so a lines wildcard remains valid beside a bytes catch-all.
+If no same-unit rule can match, the wildcard entry remains well-formed.
+
+An explicit rule list still validates every named rule, even when its selector
+does not match the entry's path: unknown IDs, unit mismatches, absent severity
+limits, and ceilings below the corresponding limit are refused. For either
+form, equality with the limit is valid. A violation is a load-time schema error
+(exit 2) through both `audit` and `check`, naming the registry, the entry's path,
+and the offending rule. For example, a soft wildcard entry accepting 300 lines
+for `src/suite.rs` is refused when a matching lines rule `source` has soft limit
+500, just as `rules = ["source"]` is.
 
 Every diagnostic about a single entry leads with the registry file and the
 entry's `path`, because that pair is the line the reader has to edit
