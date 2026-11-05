@@ -25,24 +25,18 @@ hard = 1048576
 message = "m"
 "#;
 
-fn configured(text: &str) -> Vec<Rule> {
-    Config::parse(text)
-        .unwrap()
-        .to_checker()
-        .unwrap()
-        .rules()
-        .to_vec()
+fn configured(text: &str) -> Checker {
+    Config::parse(text).unwrap().to_checker().unwrap()
 }
 
-fn validate(
-    config: &str,
+fn registry(
     severity: Severity,
     path: &str,
     matcher: &str,
     rule: &str,
     value: u64,
     unit: &str,
-) -> Result<(), ExceptionError> {
+) -> Registries {
     let text = format!(
         r#"fissile_exceptions_version = 2
 [[exceptions]]
@@ -58,9 +52,19 @@ reason = "the suite splits once its fixture seam exists"
         Severity::Soft => (Some(RegistrySource::new(SOFT_REGISTRY, &text)), None),
         Severity::Hard => (None, Some(RegistrySource::new(HARD_REGISTRY, &text))),
     };
-    Registries::load(soft, hard)
-        .unwrap()
-        .validate_against(&configured(config))
+    Registries::load(soft, hard).unwrap()
+}
+
+fn validate(
+    config: &str,
+    severity: Severity,
+    path: &str,
+    matcher: &str,
+    rule: &str,
+    value: u64,
+    unit: &str,
+) -> Result<(), ExceptionError> {
+    registry(severity, path, matcher, rule, value, unit).validate_with_checker(&configured(config))
 }
 
 fn wildcard(config: &str, path: &str, matcher: &str, max: u64) -> Result<(), ExceptionError> {
@@ -92,6 +96,24 @@ fn soft_ceiling_below_the_applicable_limit_is_refused() {
         300,
         500,
     );
+}
+
+#[test]
+fn rules_only_api_still_checks_wildcard_ceilings() {
+    let checker = configured(CONFIG);
+    for (matcher, path) in [("exact", "src/suite.rs"), ("glob", "src/*.rs")] {
+        below(
+            registry(Severity::Soft, path, matcher, "*", 300, "lines")
+                .validate_against(checker.rules()),
+            Severity::Soft,
+            path,
+            300,
+            500,
+        );
+        registry(Severity::Soft, path, matcher, "*", 500, "lines")
+            .validate_against(checker.rules())
+            .unwrap();
+    }
 }
 
 #[test]
@@ -258,10 +280,42 @@ fn disjoint_and_fully_excluded_globs_remain_inert() {
 
 #[test]
 fn excludes_may_cover_the_shared_paths_without_covering_either_glob() {
+    // Only src/suite.rs is shared; src/suite.rx and src/other.rs remain
+    // outside the intersection on opposite sides.
     let config = CONFIG
-        .replace("src/**/*.rs", "src/suite.*")
+        .replace("src/**/*.rs", "src/suite.r?")
         .replace("src/vendor/**", "src/suite.rs");
     wildcard(&config, "src/*.rs", "glob", 1).unwrap();
+}
+
+#[test]
+fn intersection_exclusion_does_not_hide_an_unexcluded_shared_path() {
+    let include = Glob::new("src/suite.*");
+    let entry = Glob::new("src/*.rs");
+    let exclude = Glob::new("src/suite.rs");
+    let witness = "src/suite.extra.rs";
+    assert!(include.matches(witness));
+    assert!(entry.matches(witness));
+    assert!(!exclude.matches(witness));
+    let config = CONFIG
+        .replace("src/**/*.rs", include.pattern())
+        .replace("src/vendor/**", exclude.pattern());
+    below(
+        wildcard(&config, entry.pattern(), "glob", 1),
+        Severity::Soft,
+        entry.pattern(),
+        1,
+        500,
+    );
+}
+
+#[test]
+fn short_globs_with_long_question_suffixes_remain_disjoint() {
+    for questions in [18, 22] {
+        let include = format!("src/*a{}.rs", "?".repeat(questions));
+        let config = CONFIG.replace("src/**/*.rs", &include);
+        wildcard(&config, "src/*.md", "glob", 1).unwrap();
+    }
 }
 
 #[test]

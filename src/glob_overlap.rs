@@ -9,18 +9,18 @@ use crate::{Glob, Selector};
 
 /// All overlap callers use the same language decision (§FS-003-exceptions.3).
 pub(crate) fn intersects(left: &Glob, right: &Glob) -> bool {
-    common_path(vec![Machine::glob(left), Machine::glob(right)], &[])
+    common_path([Machine::glob(left), Machine::glob(right)], &[])
 }
 
 /// Whether an include and the entry share a path outside the union of excludes
 /// (§FS-003-exceptions.4). No filesystem inventory or precedence is involved.
 pub(crate) fn reaches(entry: &Glob, selector: &Selector, excludes: &[Glob]) -> bool {
     match selector {
-        Selector::Glob(includes) => includes.iter().any(|include| {
-            common_path(vec![Machine::glob(entry), Machine::glob(include)], excludes)
-        }),
+        Selector::Glob(includes) => includes
+            .iter()
+            .any(|include| common_path([Machine::glob(entry), Machine::glob(include)], excludes)),
         _ => common_path(
-            vec![Machine::glob(entry), Machine::selector(selector)],
+            [Machine::glob(entry), Machine::selector(selector)],
             excludes,
         ),
     }
@@ -153,7 +153,7 @@ impl Machine {
         machine
     }
 
-    /// Determinize lazily: close only subsets reached by the product search
+    /// Close excluded-language subsets under epsilon transitions
     /// (§FS-003-exceptions.4). Sorted subsets give canonical visited keys.
     fn close(&self, mut states: Vec<usize>) -> Vec<usize> {
         let mut seen = vec![false; self.nodes.len()];
@@ -195,56 +195,155 @@ impl Machine {
     }
 }
 
-/// Search the finite product of two required languages and all exclusions.
-/// Acceptance requires both includes and no exclude, which subtracts their
-/// union even when it covers only the intersection (§FS-003-exceptions.4).
-/// Worst-case subset growth is exponential; no depth cutoff approximates it.
-fn common_path(mut machines: Vec<Machine>, excludes: &[Glob]) -> bool {
-    machines.extend(excludes.iter().map(Machine::glob));
-    let mut alphabet = vec!['/'];
-    for machine in &machines {
-        for node in &machine.nodes {
-            for &(symbol, _) in &node.edges {
-                if let Symbol::Literal(character) = symbol {
-                    alphabet.push(character);
+/// Positive matches need one accepting run each; an exclusion must retain
+/// every run to decide that none accepts (§FS-003-exceptions.4).
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct ProductState {
+    required: [usize; 2],
+    excluded: Vec<Vec<usize>>,
+    has_segment: bool,
+}
+
+/// Keep required NFAs nondeterministic (§GOAL-001-fast-feedback.1). Without
+/// exclusions, the state count is at most twice the product of their node counts.
+/// Only exclusion complements may require exponentially many subsets
+/// (§FS-003-exceptions.4); the decision has no depth or time cutoff.
+struct Search {
+    required: [Machine; 2],
+    excluded: Vec<Machine>,
+    alphabet: Vec<char>,
+    visited: HashSet<ProductState>,
+}
+
+impl Search {
+    /// Partition characters by all literal and separator predicates
+    /// (§FS-001-config.3), including those in the excluded languages.
+    fn new(required: [Machine; 2], excludes: &[Glob]) -> Self {
+        let excluded: Vec<_> = excludes.iter().map(Machine::glob).collect();
+        let mut alphabet = vec!['/'];
+        for machine in required.iter().chain(&excluded) {
+            for node in &machine.nodes {
+                for &(symbol, _) in &node.edges {
+                    if let Symbol::Literal(character) = symbol {
+                        alphabet.push(character);
+                    }
                 }
             }
         }
+        alphabet.sort_unstable();
+        alphabet.dedup();
+        let other = (0..)
+            .filter_map(char::from_u32)
+            .find(|c| !alphabet.contains(c))
+            .unwrap();
+        alphabet.push(other);
+        Self {
+            required,
+            excluded,
+            alphabet,
+            visited: HashSet::new(),
+        }
     }
-    alphabet.sort_unstable();
-    alphabet.dedup();
-    let other = (0..)
-        .filter_map(char::from_u32)
-        .find(|c| !alphabet.contains(c))
-        .unwrap();
-    alphabet.push(other);
 
-    let start: Vec<_> = machines
-        .iter()
-        .map(|machine| machine.close(vec![0]))
-        .collect();
-    let mut pending = vec![(start, false)];
-    let mut visited = HashSet::new();
-    while let Some((states, has_segment)) = pending.pop() {
-        if !visited.insert((states.clone(), has_segment)) {
-            continue;
-        }
-        let accepts = |i: usize| machines[i].accepts(&states[i]);
-        // A path split always has at least one segment, even for the empty
-        // string. Do not accept the zero-segment epsilon route of `**` alone.
-        if has_segment && accepts(0) && accepts(1) && !(2..machines.len()).any(accepts) {
-            return true;
-        }
-        for &character in &alphabet {
-            let next: Vec<_> = machines
+    /// Follow independent positive epsilon moves and synchronized character
+    /// moves. Subtract the union of exclusions, even if it covers only the
+    /// intersection (§FS-003-exceptions.4).
+    fn common_path(&mut self) -> bool {
+        let start = ProductState {
+            required: [0, 0],
+            excluded: self
+                .excluded
                 .iter()
-                .zip(&states)
-                .map(|(machine, state)| machine.step(state, character))
-                .collect();
-            if !next[0].is_empty() && !next[1].is_empty() {
-                pending.push((next, has_segment || character == '/'));
+                .map(|machine| machine.close(vec![0]))
+                .collect(),
+            has_segment: false,
+        };
+        let mut pending = vec![start];
+        while let Some(state) = pending.pop() {
+            if !self.visited.insert(state.clone()) {
+                continue;
+            }
+            // A path split has a segment even for the empty string: reject
+            // the zero-segment epsilon route through `**` (§FS-001-config.3).
+            if state.has_segment
+                && self
+                    .required
+                    .iter()
+                    .zip(state.required)
+                    .all(|(machine, node)| node == machine.nodes.len() - 1)
+                && !self
+                    .excluded
+                    .iter()
+                    .zip(&state.excluded)
+                    .any(|(machine, states)| machine.accepts(states))
+            {
+                return true;
+            }
+            for (i, machine) in self.required.iter().enumerate() {
+                for &next in &machine.nodes[state.required[i]].epsilon {
+                    let mut successor = state.clone();
+                    successor.required[i] = next;
+                    pending.push(successor);
+                }
+            }
+            let left = &self.required[0].nodes[state.required[0]];
+            let right = &self.required[1].nodes[state.required[1]];
+            for &character in &self.alphabet {
+                for &(left_symbol, left_next) in &left.edges {
+                    if !left_symbol.accepts(character) {
+                        continue;
+                    }
+                    for &(right_symbol, right_next) in &right.edges {
+                        if right_symbol.accepts(character) {
+                            pending.push(ProductState {
+                                required: [left_next, right_next],
+                                excluded: self
+                                    .excluded
+                                    .iter()
+                                    .zip(&state.excluded)
+                                    .map(|(machine, states)| machine.step(states, character))
+                                    .collect(),
+                                has_segment: state.has_segment || character == '/',
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
+/// One exact overlap decision shared by entry/removal and validation callers
+/// (§FS-003-exceptions.3, §FS-003-exceptions.4).
+fn common_path(required: [Machine; 2], excludes: &[Glob]) -> bool {
+    Search::new(required, excludes).common_path()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Count product states rather than timing an exponential regression
+    /// (§GOAL-001-fast-feedback.1).
+    #[test]
+    fn disjoint_question_suffixes_stay_within_the_nfa_product() {
+        for questions in [18, 22] {
+            let left = Glob::new(format!("src/*a{}.rs", "?".repeat(questions)));
+            let right = Glob::new("src/*.md");
+            for (left, right) in [(&left, &right), (&right, &left)] {
+                let required = [Machine::glob(left), Machine::glob(right)];
+                let bound = 2 * required[0].nodes.len() * required[1].nodes.len();
+                let mut search = Search::new(required, &[]);
+                assert!(!search.common_path());
+                assert!(
+                    search.visited.len() <= bound,
+                    "{} product states exceed the {bound}-state NFA bound",
+                    search.visited.len()
+                );
+                assert!(!left.intersects(right));
+                assert!(!reaches(left, &Selector::Glob(vec![right.clone()]), &[]));
             }
         }
     }
-    false
 }
