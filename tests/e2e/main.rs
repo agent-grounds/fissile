@@ -23,6 +23,7 @@ mod soft_edit_limit;
 mod soft_edit_provenance;
 mod staged_invocation;
 mod staged_paths;
+mod unit_grouping;
 
 /// One scenario manifest (`case.toml`). Unknown keys are rejected: a misspelled
 /// key would otherwise drop the assertion it names, and a dropped assertion is a
