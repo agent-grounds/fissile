@@ -167,7 +167,7 @@ pub fn paint(color: bool, code: &str, text: &str) -> String {
 }
 
 /// The standing findings as grouped text blocks: one per `(severity, rule,
-/// rendered guidance)`, hard first, files largest first, and shared guidance
+/// rendered guidance, unit)`, hard first, files largest first, and shared guidance
 /// written once under a severity-tinted header (§FS-004-check-audit.1).
 pub fn finding_blocks(outcomes: &[Outcome], color: bool) -> Vec<String> {
     finding_blocks_with_context(outcomes, color, &[])
@@ -418,7 +418,8 @@ pub fn stale_blocks(entries: &[&Exception], color: bool) -> Vec<String> {
 
 const STALE_GUIDANCE: &str = "The file moved or was deleted, so the entry silences nothing. Remove it with `fissile exception remove`, or point it at the path the file moved to.";
 
-/// The findings that share a severity, a rule, and one rendered guidance string.
+/// Findings sharing severity, rule, rendered guidance, unit and promotion status
+/// (§FS-004-check-audit.1).
 struct Group<'a> {
     head: Finding<'a>,
     overflows: Vec<Finding<'a>>,
@@ -451,24 +452,33 @@ impl<'a> Group<'a> {
     /// Guidance is compared as rendered text, not by message ID: a template that
     /// interpolates `{path}` says something different about each file, so those
     /// findings must not be collapsed under one line (§FS-001-config.4).
+    /// Shared rule IDs still keep units separate (§FS-004-check-audit.1).
     fn accepts(&self, finding: &Finding<'a>) -> bool {
         self.head.overflow.severity == finding.overflow.severity
             && self.head.overflow.rule_id == finding.overflow.rule_id
             && self.head.overflow.message.text == finding.overflow.message.text
+            && self.head.overflow.unit == finding.overflow.unit
             && self.head.soft_edit.is_some_and(SoftEdit::promoted)
                 == finding.soft_edit.is_some_and(SoftEdit::promoted)
     }
 
-    /// Hard before soft, then by rule ID, then by message ID.
-    fn order(&self) -> (u8, &str, &str) {
+    /// Hard before soft, then rule ID, message ID, and finally unit in
+    /// bytes, lines, tokens order (§FS-004-check-audit.1).
+    fn order(&self) -> (u8, &str, &str, u8) {
         let severity = match self.head.overflow.severity {
             Severity::Hard => 0,
             Severity::Soft => 1,
+        };
+        let unit = match self.head.overflow.unit {
+            Unit::Bytes => 0,
+            Unit::Lines => 1,
+            Unit::Tokens => 2,
         };
         (
             severity,
             &self.head.overflow.rule_id,
             &self.head.overflow.message.id,
+            unit,
         )
     }
 
