@@ -52,10 +52,10 @@ impl Glob {
         match_segments(&self.segments, &path_segments)
     }
 
-    /// Whether this glob and another glob can match at least one common path.
+    /// Whether this glob and another glob can match at least one common path
+    /// (§FS-003-exceptions.3), using the same overlap decision as validation.
     pub fn intersects(&self, other: &Glob) -> bool {
-        let mut memo = std::collections::HashMap::new();
-        segments_intersect(&self.segments, &other.segments, 0, 0, &mut memo)
+        super::glob_overlap::intersects(self, other)
     }
 }
 
@@ -147,96 +147,6 @@ fn match_within(pattern: &[char], text: &[char]) -> bool {
             _ => false,
         },
     }
-}
-
-fn segments_intersect(
-    left: &[String],
-    right: &[String],
-    i: usize,
-    j: usize,
-    memo: &mut std::collections::HashMap<(usize, usize), bool>,
-) -> bool {
-    if let Some(result) = memo.get(&(i, j)) {
-        return *result;
-    }
-
-    let result = match (
-        left.get(i).map(String::as_str),
-        right.get(j).map(String::as_str),
-    ) {
-        (None, None) => true,
-        (Some("**"), None) => segments_intersect(left, right, i + 1, j, memo),
-        (None, Some("**")) => segments_intersect(left, right, i, j + 1, memo),
-        (None, Some(_)) | (Some(_), None) => false,
-        (Some("**"), Some("**")) => {
-            segments_intersect(left, right, i + 1, j, memo)
-                || segments_intersect(left, right, i, j + 1, memo)
-        }
-        (Some("**"), Some(_)) => {
-            segments_intersect(left, right, i + 1, j, memo)
-                || segments_intersect(left, right, i, j + 1, memo)
-        }
-        (Some(_), Some("**")) => {
-            segments_intersect(left, right, i, j + 1, memo)
-                || segments_intersect(left, right, i + 1, j, memo)
-        }
-        (Some(left_segment), Some(right_segment)) => {
-            segment_patterns_intersect(left_segment, right_segment)
-                && segments_intersect(left, right, i + 1, j + 1, memo)
-        }
-    };
-
-    memo.insert((i, j), result);
-    result
-}
-
-fn segment_patterns_intersect(left: &str, right: &str) -> bool {
-    let left: Vec<char> = left.chars().collect();
-    let right: Vec<char> = right.chars().collect();
-    let mut memo = std::collections::HashMap::new();
-    segment_patterns_intersect_at(&left, &right, 0, 0, &mut memo)
-}
-
-fn segment_patterns_intersect_at(
-    left: &[char],
-    right: &[char],
-    i: usize,
-    j: usize,
-    memo: &mut std::collections::HashMap<(usize, usize), bool>,
-) -> bool {
-    if let Some(result) = memo.get(&(i, j)) {
-        return *result;
-    }
-
-    let result = match (left.get(i), right.get(j)) {
-        (None, None) => true,
-        (Some('*'), None) => segment_patterns_intersect_at(left, right, i + 1, j, memo),
-        (None, Some('*')) => segment_patterns_intersect_at(left, right, i, j + 1, memo),
-        (None, Some(_)) | (Some(_), None) => false,
-        (Some('*'), Some('*')) => {
-            segment_patterns_intersect_at(left, right, i + 1, j, memo)
-                || segment_patterns_intersect_at(left, right, i, j + 1, memo)
-        }
-        (Some('*'), Some(_)) => {
-            segment_patterns_intersect_at(left, right, i + 1, j, memo)
-                || segment_patterns_intersect_at(left, right, i, j + 1, memo)
-        }
-        (Some(_), Some('*')) => {
-            segment_patterns_intersect_at(left, right, i, j + 1, memo)
-                || segment_patterns_intersect_at(left, right, i + 1, j, memo)
-        }
-        (Some(left_char), Some(right_char)) if chars_can_match(*left_char, *right_char) => {
-            segment_patterns_intersect_at(left, right, i + 1, j + 1, memo)
-        }
-        _ => false,
-    };
-
-    memo.insert((i, j), result);
-    result
-}
-
-fn chars_can_match(left: char, right: char) -> bool {
-    left == '?' || right == '?' || left == right
 }
 
 #[cfg(test)]

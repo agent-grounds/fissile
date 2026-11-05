@@ -8,7 +8,7 @@ use std::fmt;
 use serde::Deserialize;
 
 use crate::config::UnitSpec;
-use crate::{Glob, Rule, Severity, Unit};
+use crate::{Checker, Glob, Rule, ScopedRule, Severity, Unit};
 
 /// The only supported registry version (§FS-003-exceptions.1). Version 2 removed
 /// the `id` and `replaces` keys (§FS-003-exceptions.2.2).
@@ -293,48 +293,24 @@ impl Registries {
     /// Validate every entry against the configured rules (§FS-003-exceptions.4):
     /// listed rules exist, share the entry's unit, carry the relevant severity
     /// limit, and the accepted ceiling is at least that limit.
+    /// This rules-only view has no exclusions; config-backed callers must use
+    /// [`Self::validate_with_checker`] to retain their complete rule scopes.
     pub fn validate_against(&self, rules: &[Rule]) -> Result<(), ExceptionError> {
-        for entry in self.all() {
-            // Mixed-unit rule lists are rejected for explicit lists too: a single
-            // entry may only silence rules that share its unit (§FS-003-exceptions.3).
-            for rule_id in &entry.rules {
-                if rule_id == "*" {
-                    continue;
-                }
-                let Some(rule) = rules.iter().find(|r| &r.id == rule_id) else {
-                    return Err(ExceptionError::UnknownRule {
-                        site: entry.site(),
-                        rule: rule_id.clone(),
-                    });
-                };
-                if rule.budget.unit != entry.max_unit {
-                    return Err(ExceptionError::UnitMismatch {
-                        site: entry.site(),
-                        rule: rule_id.clone(),
-                    });
-                }
-                let limit = match entry.severity {
-                    Severity::Soft => rule.budget.soft,
-                    Severity::Hard => rule.budget.hard,
-                };
-                let Some(limit) = limit else {
-                    return Err(ExceptionError::NoSeverityLimit {
-                        site: entry.site(),
-                        rule: rule_id.clone(),
-                        severity: entry.severity,
-                    });
-                };
-                if entry.max_value < limit {
-                    return Err(ExceptionError::BelowLimit {
-                        site: entry.site(),
-                        rule: rule_id.clone(),
-                        max: entry.max_value,
-                        limit,
-                    });
-                }
-            }
-        }
-        Ok(())
+        self.validate_scopes(
+            &rules
+                .iter()
+                .map(|rule| ScopedRule {
+                    rule,
+                    exclusions: &[],
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Validate against every configured scope, retaining exclusions while
+    /// ignoring precedence and scan inventory (§FS-003-exceptions.4).
+    pub fn validate_with_checker(&self, checker: &Checker) -> Result<(), ExceptionError> {
+        self.validate_scopes(&checker.scoped_rules().collect::<Vec<_>>())
     }
 
     /// Resolve how the severity-matching registry treats one overflow. Returns a
@@ -629,6 +605,9 @@ pub use errors::{EntrySite, ExceptionError};
 #[path = "exceptions_removal.rs"]
 mod removal;
 pub(crate) use removal::RemovalEntry;
+
+#[path = "exceptions_validation.rs"]
+mod validation;
 
 #[cfg(test)]
 #[path = "exceptions_tests.rs"]
