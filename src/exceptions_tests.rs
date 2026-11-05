@@ -3,6 +3,9 @@
 use super::*;
 use crate::config::Config;
 
+#[path = "exceptions_validation_tests.rs"]
+mod wildcard_validation;
+
 const SOFT: &str = r#"
 fissile_exceptions_version = 2
 
