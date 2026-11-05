@@ -16,14 +16,21 @@ fn fixture(name: &str) -> Work {
     let init = fissile(root, &["init", ".", "--no-hook"]);
     assert!(init.status.success(), "{init:?}");
     let config = root.join(".agent-grounds/fissile.toml");
-    let text = fs::read_to_string(&config).unwrap();
-    assert!(text.contains("soft = 350\n") && text.contains("hard = 550\n"));
-    fs::write(
-        config,
-        text.replace("soft = 350\n", "soft = 500\n")
-            .replace("hard = 550\n", "hard = 2500\n"),
-    )
-    .unwrap();
+    // Windows builds embed the shipped config template with CRLF line endings.
+    let original = fs::read_to_string(&config).unwrap();
+    let lines: Vec<_> = original.lines().collect();
+    assert!(lines.contains(&"soft = 350") && lines.contains(&"hard = 550"));
+    let mut text = lines
+        .iter()
+        .map(|line| match *line {
+            "soft = 350" => "soft = 500",
+            "hard = 550" => "hard = 2500",
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    text.push('\n');
+    fs::write(config, text).unwrap();
     fs::create_dir_all(root.join("src")).unwrap();
     for count in [450, 600, 605, 608, 611] {
         let body: String = (1..=count)
