@@ -28,7 +28,11 @@ locally and remotely (§GOAL-003-friendly-output). Equal index and working-tree
 bytes do not make a staged invocation and a snapshot invocation equivalent:
 only the staged and base invocations prove and spend edit history (§FS-004-check-audit.1.4).
 
-Text findings are grouped, one block per `(severity, rule, rendered guidance)`.
+Text findings are grouped, one block per `(severity, rule, rendered guidance, unit)`,
+with promoted and advisory soft findings kept separate. Rules may share an ID
+across units: one file over both a line and a byte budget appears in two blocks,
+each counting that file once and naming its own unit and crossed limit. Findings
+in different units never share a block, even when their rule ID and guidance match.
 The header names the severity, the file count, the crossed limit, the rule, and
 the message ID; the guidance follows once, indented two spaces; the files follow
 indented four. Guidance is never repeated per file — a repo-wide run says what
@@ -47,7 +51,9 @@ soft: 1 file over the 350-line budget [rule: rust-source, message: split-rust-so
     src/domain/tax.rs: 402 non-blank lines (budget 350; an exception here would accept 500)
 ```
 
-Blocks are ordered hard before soft, then by rule ID; files within a block are
+Blocks are ordered hard before soft, then by rule ID, then by message ID, and
+finally by unit (bytes, lines, tokens), independent of finding arrival order.
+Files within a block are
 ordered by measured value descending, then by path. Blocks are separated by a
 blank line. A message that interpolates a per-file variable renders distinct
 text per file, which by the grouping key puts each file in its own block

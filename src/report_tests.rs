@@ -9,6 +9,9 @@ use crate::{Budget, MessageTemplate, RenderedMessage, Rule, Selector, Unit};
 
 const HARD_REGISTRY: &str = "docs/file-size-human-exceptions.toml";
 
+#[path = "report_unit_tests.rs"]
+mod units;
+
 const CONFIG: &str = r#"
 fissile_config_version = 1
 [[messages]]
