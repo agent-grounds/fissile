@@ -211,14 +211,16 @@ pub(crate) enum Reason {
 
 /// The base epilogue: the lead on its own line, `<ref>` as typed, then the
 /// remedy wrapped at 78 columns. Nothing is staged and no commit is being made,
-/// so it names neither the hook, nor `--no-verify`, nor unstaging
-/// (§FS-004-check-audit.1.2).
+/// so it names neither the hook, nor `--no-verify`, nor unstaging, and a promoted
+/// remedy says what clears the refusal at `HEAD` (§FS-004-check-audit.1.2).
 pub(crate) fn epilogue(expression: &str, reason: Reason) -> String {
     let remedy = match reason {
         Reason::Overflow => "Split the file, or ask a human for a reviewed hard exception.",
         Reason::PromotedSoft => {
-            "Split now or record the debt with `fissile exception add <path> --severity \
-             soft --rule <rule> --kind <kind>`."
+            "A file still over its budget at HEAD is refused even when this branch made \
+             it smaller: split so it ends at or below the size its line above names, or, \
+             where a seam stops short of that, record the remainder as debt with `fissile \
+             exception add <path> --severity soft --rule <rule> --kind <kind>`."
         }
         Reason::DeadEntry => {
             "Remove the exception entry above, or point it at the path its file moved to."

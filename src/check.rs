@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::base::{self, Range, Selection};
 use crate::cli::{self, CommandError, Format, Loaded};
-use crate::exceptions::{Exception, MatchKind};
+use crate::exceptions::{Exception, MatchKind, Registries, Verdict};
 use crate::json::Json;
 use crate::report::{self, Outcome};
 use crate::scan;
@@ -172,6 +172,7 @@ fn run_mode(
                 .map(Outcome::overflow)
                 .filter(|overflow| overflow.severity == crate::Severity::Soft)
             {
+                note_soft_ceiling(&mut contexts, &loaded.registries, overflow)?;
                 let hit = hits
                     .iter()
                     .find(|hit| {
@@ -266,6 +267,29 @@ fn run_mode(
         notes,
         errors,
     })
+}
+
+/// Record the exception ceiling a reported soft finding stands above, which is
+/// what clears it if the edit count promotes it (§FS-004-check-audit.1.4).
+fn note_soft_ceiling(
+    contexts: &mut [report::FindingContext],
+    registries: &Registries,
+    overflow: &crate::Overflow,
+) -> Result<(), CommandError> {
+    let path = overflow.path.to_string_lossy().replace('\\', "/");
+    let verdict = registries.verdict(
+        crate::Severity::Soft,
+        &path,
+        &overflow.rule_id,
+        overflow.unit,
+        overflow.actual,
+    )?;
+    if let Verdict::Exceeded(entry) = verdict {
+        for context in contexts.iter_mut().filter(|c| c.describes(overflow)) {
+            context.soft_ceiling = Some(entry.max_value);
+        }
+    }
+    Ok(())
 }
 
 /// The exact-path entries this run's own file set proves are gone
