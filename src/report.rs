@@ -188,9 +188,17 @@ pub(crate) struct FindingContext {
     /// caller would pass to `exception add --rule` and so the one that binds
     /// their soft ceiling (§DF-010-stated-ceilings-are-exact.2).
     hard_limit: Option<u64>,
+    /// The soft exception ceiling this finding stands above, which clears it in
+    /// place of the budget; only a promoting run records it (§FS-004-check-audit.1.4).
+    pub(crate) soft_ceiling: Option<u64>,
 }
 
 impl FindingContext {
+    /// Whether this names the `(file, rule, unit)` of `overflow` (§FS-004-check-audit.1).
+    pub(crate) fn describes(&self, overflow: &Overflow) -> bool {
+        self.path == overflow.path && self.rule_id == overflow.rule_id && self.unit == overflow.unit
+    }
+
     /// The ceiling a `fissile exception add` with no `--max` would record for
     /// this file: the measurement quantized up to the unit's `[exceptions.bump]`
     /// step (§FS-004-check-audit.1, §DF-006-quantized-ceilings.1). It is the
@@ -240,6 +248,7 @@ pub(crate) fn contexts_for_file(
             }),
             bump_step: bump.step(hit.rule.budget.unit),
             hard_limit: hit.rule.budget.hard,
+            soft_ceiling: None,
         })
         .collect()
 }
@@ -249,11 +258,7 @@ fn context_for<'a>(
     contexts: &'a [FindingContext],
     overflow: &Overflow,
 ) -> Option<&'a FindingContext> {
-    contexts.iter().find(|context| {
-        context.path == overflow.path
-            && context.rule_id == overflow.rule_id
-            && context.unit == overflow.unit
-    })
+    contexts.iter().find(|context| context.describes(overflow))
 }
 
 /// Render command findings with the line-counting context carried alongside
@@ -335,15 +340,18 @@ bypassing it with `--no-verify` leaves the overflow for review or CI.";
 
 /// The commit epilogue for edit-promoted soft debt: the exception remains in
 /// the soft registry because promotion changes blocking, not severity. It also
-/// distinguishes enforcing staged hooks from advisory snapshot hooks
+/// distinguishes enforcing staged hooks from advisory snapshot hooks, and says
+/// what clears the refusal, which a project's rewritten guidance cannot
 /// (§FS-004-check-audit.1.2).
 pub const COMMIT_GATE_PROMOTED: &str = "\
 `fissile check --staged` rejected this staged snapshot. Soft-edit promotion
 blocks a commit only when the hook runs that command; a hook that calls
-`fissile check <paths>` keeps soft findings advisory. Split now or record the
-debt with `fissile exception add <path> --severity soft --rule <rule> --kind
-<kind>`. Bypassing such a hook with `--no-verify` leaves the overflow for
-review or CI.";
+`fissile check <paths>` keeps soft findings advisory. A file still over its
+budget is refused even when this edit made it smaller: split so this commit
+ends it at or below the size its line above names, or, where a seam stops short
+of that, record the remainder as debt with `fissile exception add <path>
+--severity soft --rule <rule> --kind <kind>`. Bypassing such a hook with
+`--no-verify` leaves the overflow for review or CI.";
 
 /// The same epilogue when a dead registry entry is the only thing blocking the
 /// commit: there is no file to split, and the fix is in the registry the block
@@ -423,6 +431,22 @@ struct Finding<'a> {
     soft_edit: Option<&'a SoftEdit>,
 }
 
+impl Finding<'_> {
+    /// What clears a promoted finding and how far away it is, in the detail's own
+    /// `unit` (§FS-004-check-audit.1.4). The target itself passes and a reported
+    /// finding stands above it, so the distance is the plain difference.
+    fn clearing_clause(&self, unit: &str) -> Option<String> {
+        self.soft_edit.is_some_and(SoftEdit::promoted).then(|| {
+            let (whose, target) = match self.context.and_then(|context| context.soft_ceiling) {
+                Some(ceiling) => ("the soft exception's ", ceiling),
+                None => ("", self.overflow.limit),
+            };
+            let away = self.overflow.actual - target;
+            format!("to clear, end at or below {whose}{target} {unit}, {away} away")
+        })
+    }
+}
+
 impl<'a> Group<'a> {
     /// Guidance is compared as rendered text, not by message ID: a template that
     /// interpolates `{path}` says something different about each file, so those
@@ -483,16 +507,18 @@ impl<'a> Group<'a> {
         for finding in &self.overflows {
             let overflow = finding.overflow;
             let basis = finding.context.and_then(|context| context.line_basis);
-            let measurement = match basis {
-                Some(basis) => format!("{} {basis}", overflow.actual),
-                None => format!("{} {}", overflow.actual, overflow.unit),
+            let unit = match basis {
+                Some(basis) => basis.to_owned(),
+                None => overflow.unit.to_string(),
             };
+            let measurement = format!("{} {unit}", overflow.actual);
             // A byte or token detail carries no budget clause, so the ceiling
             // opens a parenthesis of its own (§FS-004-check-audit.1).
             let clauses: Vec<String> = basis
                 .map(|_| format!("budget {}", overflow.limit))
                 .into_iter()
                 .chain(finding.soft_edit.map(soft_edit_clause))
+                .chain(finding.clearing_clause(&unit))
                 .chain(
                     finding
                         .context

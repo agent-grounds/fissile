@@ -138,6 +138,7 @@ fn context_with(outcome: &Outcome, bump_step: u64, hard_limit: Option<u64>) -> F
         line_basis: Some("non-blank lines"),
         bump_step,
         hard_limit,
+        soft_ceiling: None,
     }
 }
 
