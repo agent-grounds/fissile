@@ -27,11 +27,20 @@ fn fixture(name: &str) -> Work {
     let init = fissile(work.path(), &["init", ".", "--no-hook"]);
     assert_eq!(init.status.code(), Some(0), "{init:?}");
     let config = work.path().join(".agent-grounds/fissile.toml");
+    // `lines()` drops the CRLF a Windows build's `include_str!` template carries.
     let original = fs::read_to_string(&config).unwrap();
-    assert!(original.contains("soft = 350\n") && original.contains("hard = 550\n"));
-    let mut text = original
-        .replace("soft = 350\n", "soft = 500\n")
-        .replace("hard = 550\n", "hard = 2500\n");
+    let lines: Vec<_> = original.lines().collect();
+    assert!(lines.contains(&"soft = 350") && lines.contains(&"hard = 550"));
+    let mut text = lines
+        .iter()
+        .map(|line| match *line {
+            "soft = 350" => "soft = 500",
+            "hard = 550" => "hard = 2500",
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    text.push('\n');
     text.push_str(
         r#"
 [[rules]]
