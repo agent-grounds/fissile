@@ -61,7 +61,8 @@ pub struct Loaded {
     pub hard_registry: PathBuf,
 }
 
-/// Load and validate everything a `check`/`audit`/`exception` run needs.
+/// Load and validate everything a `check`/`audit`/`exception` run needs,
+/// retaining rule exclusions for wildcard validation (§FS-003-exceptions.4).
 pub fn load(root: &Path, config_path: Option<&Path>) -> Result<Loaded, CommandError> {
     load_with_soft_edit_limits(root, config_path).map(|(loaded, _)| loaded)
 }
@@ -71,7 +72,8 @@ pub(crate) fn load_with_soft_edit_limits(
     config_path: Option<&Path>,
 ) -> Result<(Loaded, SoftEditLimits), CommandError> {
     let (loaded, soft_edit_limits) = load_unvalidated_with_soft_edit_limits(root, config_path)?;
-    loaded.registries.validate_against(loaded.checker.rules())?;
+    // Validate complete scopes before measuring any files (§FS-003-exceptions.4).
+    loaded.registries.validate_with_checker(&loaded.checker)?;
     Ok((loaded, soft_edit_limits))
 }
 

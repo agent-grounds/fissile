@@ -18,6 +18,7 @@ pub mod entrypoint;
 pub mod exception;
 pub mod exceptions;
 mod glob;
+mod glob_overlap;
 mod history;
 pub mod hook;
 pub mod init;

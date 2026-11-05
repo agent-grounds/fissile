@@ -517,7 +517,8 @@ pub fn validate_combined(
             .map(|text| RegistrySource::new(&loaded.config.exceptions.hard_registry, text)),
     )
     .map_err(|error| error.naming_hard_registry(&loaded.config.exceptions.hard_registry))?;
-    registries.validate_against(loaded.checker.rules())?;
+    // Registry writes obey the same scope-aware load contract (§FS-003-exceptions.4).
+    registries.validate_with_checker(&loaded.checker)?;
     Ok(())
 }
 
