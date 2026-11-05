@@ -29,3 +29,13 @@ until = "indefinite"
 reason = """
 The generated default is embedded and maintained as one consumable TOML document; a sibling split would no longer represent the artifact fissile init emits.
 """
+[[exceptions]]
+path = "docs/functional-spec/FS-004-check-audit.md"
+match = "exact"
+rules = ["spec-docs"]
+kind = "deferred"
+max_accepted = { value = 800, unit = "lines" }
+until = "§FS-004-check-audit.1.5 moves to a child declaration and this file is back under its soft limit"
+reason = """
+The boundary is missing: §FS-004-check-audit.1.5 belongs in a child declaration, but none exists yet, and moving it changes coordinates cited across the repository, which a change to the words of a refusal must not carry.
+"""

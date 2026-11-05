@@ -471,6 +471,69 @@ fn the_ceiling_reads_the_configured_step_for_each_unit() {
     }
 }
 
+/// The clearing clause speaks the finding's own unit: the counting basis of a line
+/// rule, including the raw-line fallback, and otherwise bytes or tokens, whose
+/// detail has no budget clause to lean on (§FS-004-check-audit.1.4).
+#[test]
+fn promoted_detail_states_its_distance_in_the_findings_own_unit() {
+    let bump = Bump {
+        lines: 10,
+        bytes: 100,
+        tokens: 250,
+    };
+    for (unit, file, utf8, detail) in [
+        (
+            Unit::Lines,
+            crate::measure_text("src/big.rs", "a\nb\nc\n"),
+            true,
+            "src/big.rs: 3 non-blank lines (budget 2; soft edits 5/5; promoted to blocking; 4 prior committed over-soft edits + 1 staged edit; this staged edit first reaches the promotion limit; to clear, end at or below 2 non-blank lines, 1 away; an exception here would accept 10)",
+        ),
+        (
+            Unit::Lines,
+            crate::measure_text("src/big.rs", "a\nb\nc\n"),
+            false,
+            "src/big.rs: 3 physical lines (budget 2; soft edits 5/5; promoted to blocking; 4 prior committed over-soft edits + 1 staged edit; this staged edit first reaches the promotion limit; to clear, end at or below 2 physical lines, 1 away; an exception here would accept 10)",
+        ),
+        (
+            Unit::Bytes,
+            FileMeasurement::new("src/big.rs", 3),
+            true,
+            "src/big.rs: 3 bytes (soft edits 5/5; promoted to blocking; 4 prior committed over-soft edits + 1 staged edit; this staged edit first reaches the promotion limit; to clear, end at or below 2 bytes, 1 away; an exception here would accept 100)",
+        ),
+        (
+            Unit::Tokens,
+            FileMeasurement::new("src/big.rs", 3).with_tokens(3),
+            true,
+            "src/big.rs: 3 tokens (soft edits 5/5; promoted to blocking; 4 prior committed over-soft edits + 1 staged edit; this staged edit first reaches the promotion limit; to clear, end at or below 2 tokens, 1 away; an exception here would accept 250)",
+        ),
+    ] {
+        let rule = Rule::new(
+            "size",
+            Selector::All,
+            Budget::new(unit, Some(2), None),
+            MessageTemplate::new("m", "Split it."),
+        );
+        let checker = Checker::new(vec![rule]).expect("valid checker");
+        let hits = checker.evaluate(&file).expect("evaluation succeeds");
+        let outcomes =
+            evaluate_hits(&Registries::default(), &file, &hits).expect("reporting succeeds");
+        let contexts = contexts_for_file(&file, &hits, utf8, &bump);
+        let promoted = SoftEdit {
+            path: file.path.clone(),
+            rule_id: "size".to_owned(),
+            unit,
+            count: 5,
+            limit: 5,
+            history_complete: true,
+            source: EditSource::Staged,
+        };
+        let block =
+            finding_blocks_with_staged_context(&outcomes, false, &contexts, &[promoted]).remove(0);
+
+        assert!(block.ends_with(&format!("    {detail}")), "{block}");
+    }
+}
+
 /// A base run's soft edit, `before` reachable from `main` and `branch` on
 /// `main..HEAD` (§FS-004-check-audit.1.4).
 fn committed_edit(before: u64, branch: u64, complete: bool) -> SoftEdit {

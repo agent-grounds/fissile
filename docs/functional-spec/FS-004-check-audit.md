@@ -156,10 +156,12 @@ explains why a filename-passing hook can accept the same bytes:
 ```text
 `fissile check --staged` rejected this staged snapshot. Soft-edit promotion
 blocks a commit only when the hook runs that command; a hook that calls
-`fissile check <paths>` keeps soft findings advisory. Split now or record the
-debt with `fissile exception add <path> --severity soft --rule <rule> --kind
-<kind>`. Bypassing such a hook with `--no-verify` leaves the overflow for
-review or CI.
+`fissile check <paths>` keeps soft findings advisory. A file still over its
+budget is refused even when this edit made it smaller: split so this commit
+ends it at or below the size its line above names, or, where a seam stops short
+of that, record the remainder as debt with `fissile exception add <path>
+--severity soft --rule <rule> --kind <kind>`. Bypassing such a hook with
+`--no-verify` leaves the overflow for review or CI.
 ```
 
 A dead exception entry under `[exceptions].stale = "error"` (§FS-004-check-audit.1.3), where there
@@ -195,8 +197,11 @@ as the caller typed it, and the reason's remedy follows wrapped at 78 columns:
 ```
 
 - a hard overflow: `Split the file, or ask a human for a reviewed hard exception.`
-- a promoted soft overflow: ``Split now or record the debt with `fissile
-  exception add <path> --severity soft --rule <rule> --kind <kind>`.``
+- a promoted soft overflow: ``A file still over its budget at HEAD is refused
+  even when this branch made it smaller: split so it ends at or below the size
+  its line above names, or, where a seam stops short of that, record the
+  remainder as debt with `fissile exception add <path> --severity soft --rule
+  <rule> --kind <kind>`.``
 - a dead entry: `Remove the exception entry above, or point it at the path its
   file moved to.`
 - an unmeasurable file: `A selected file could not be measured, so nothing above
@@ -209,8 +214,10 @@ command's verdict. The same findings from a CI run or a manual `fissile check sr
 not gain staged semantics. Because `--staged` can be run manually or outside
 the actual commit hook, the generic epilogues make hook bypass conditional;
 the promoted-soft epilogue states exactly which hook invocation enforces its
-history-backed verdict. It says the one thing the finding's own guidance
-cannot, since a project rewrites that guidance (§DF-003-severity-guidance.1).
+history-backed verdict, and what clears it. It says what the finding's own
+guidance cannot, since a project rewrites that guidance
+(§DF-003-severity-guidance.1), and it is what lets a seam that stops short land
+under guidance that forbids cutting at the line count.
 
 ### 1.3 Stale exceptions
 
@@ -326,7 +333,9 @@ and edit 5 blocks. The promotion is still soft-limit debt: text begins `soft
 (promoted):`, its detail says `soft edits <count>/<limit>; promoted to
 blocking`, and its commit-gate epilogue directs the caller to split or add a
 soft exception. It never uses the hard-size heading, guidance, exception route,
-or provenance.
+or provenance. Every version above soft counts whether or not it is smaller than
+its parent, so an edit that shrinks a file and leaves it above soft spends the
+count and is promoted like one that grows it (§DF-013-bounded-soft-grace.3).
 
 From the first staged soft finding, its text detail says `soft edits
 <count>/<limit>`, retaining `; promoted to blocking` when promoted. With
@@ -346,6 +355,16 @@ apply, in that order. Thus `9/5` explains eight prior committed edits and a
 previously reached limit; `5/5` explains four prior committed edits and the
 staged edit reaching it; `1/5` explains zero prior committed edits and the
 staged edit starting the run without promotion.
+
+Only a promoted detail then says what clears it, as `; to clear, end at or below
+<soft> <unit>, <actual - soft> away`, before any `an exception here would accept`
+clause. `<soft>` is the rule's soft limit and `<unit>` the line rule's counting
+basis, or `bytes` or `tokens`, so 565 non-blank lines over a budget of 500 reads
+`to clear, end at or below 500 non-blank lines, 65 away`. The soft limit itself
+passes (§FS-004-check-audit.1), so the distance is exact. A file above a matching
+soft exception's ceiling clears at that ceiling instead: `; to clear, end at or
+below the soft exception's <ceiling> <unit>, <actual - ceiling> away`. The clause
+is text only; a JSON record gains no key, and its `limit` stays the rule's.
 
 JSON carries `soft_edit_count`, `soft_edit_limit`, and
 `soft_edit_history_complete`; only a blocking promotion carries
@@ -401,6 +420,8 @@ by each boundary clause that applies:
   promotion limit`.
 - Promoted with `<before>` at or above it: `; edits before <ref> already
   reached the promotion limit`.
+
+A promoted base detail then closes with the same `to clear` clause.
 
 Incomplete history reads `; history incomplete; promotion disabled; at least
 <before> committed over-soft edits before <ref> + <branch> on this branch

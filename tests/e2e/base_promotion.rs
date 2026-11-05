@@ -51,7 +51,7 @@ fn four_inherited_and_two_branch_edits_block_with_the_split() {
     let flat = folded(&text);
     assert!(
         flat.contains(
-            "Split now or record the debt with `fissile exception add <path> --severity soft --rule <rule> --kind <kind>`."
+            "A file still over its budget at HEAD is refused even when this branch made it smaller: split so it ends at or below the size its line above names, or, where a seam stops short of that, record the remainder as debt with `fissile exception add <path> --severity soft --rule <rule> --kind <kind>`."
         ),
         "{text}"
     );
@@ -75,6 +75,31 @@ fn four_inherited_and_two_branch_edits_block_with_the_split() {
     assert_eq!(finding["promotion"], "soft_edit_limit");
     assert_eq!(finding["soft_edit_source"], "committed");
     assert_eq!(finding["soft_edit_before_base"], 4);
+}
+
+/// The same strict rule and the same remedy as a staged edit, in words that claim
+/// no commit: a branch that only shrinks a promoted file is refused and told what
+/// clears it (§FS-004-check-audit.1.2, §FS-004-check-audit.1.4).
+#[test]
+fn a_branch_that_shrinks_a_promoted_file_says_what_clears_it() {
+    let work = branch_after("shrinks", 4);
+    edit_spec(work.path(), 40, "topic edit 1");
+    edit_spec(work.path(), 25, "topic edit 2 only shrinks");
+
+    let output = fissile(work.path(), &["check", "--base", "main", "--no-color"]);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let text = stdout(&output);
+    assert_eq!(
+        detail(&text).trim_start(),
+        "docs/spec.md: 25 non-blank lines (budget 20; soft edits 6/5; promoted to blocking; 4 committed over-soft edits before main + 2 on this branch; this branch first reaches the promotion limit; to clear, end at or below 20 non-blank lines, 5 away; an exception here would accept 100)"
+    );
+    assert!(
+        folded(&text).contains("is refused even when this branch made it smaller"),
+        "{text}"
+    );
+    for claim in ["--no-verify", "staged", "unstage", "hook", "this commit"] {
+        assert!(!text.contains(claim), "base run claims {claim:?}:\n{text}");
+    }
 }
 
 #[test]
@@ -110,6 +135,10 @@ fn a_branch_that_crosses_soft_starts_the_run_without_promotion() {
         "detail: {line}"
     );
     assert!(!line.contains("promoted"), "detail: {line}");
+    assert!(
+        !line.contains("to clear"),
+        "advisory, so nothing to clear: {line}"
+    );
 
     let json = fissile(
         work.path(),
@@ -192,6 +221,10 @@ fn incomplete_history_with_a_zero_count_stays_advisory() {
     ] {
         assert!(!line.contains(unproved), "unproved boundary: {line}");
     }
+    assert!(
+        !line.contains("to clear"),
+        "advisory, so nothing to clear: {line}"
+    );
 
     let json = fissile(&repo, &["check", "--base", "HEAD^1", "--format", "json"]);
     assert_eq!(json.status.code(), Some(0), "{json:?}");

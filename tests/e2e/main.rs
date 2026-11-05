@@ -17,6 +17,7 @@ mod base_support;
 // Unix-only: its fixture compares canonical paths, which Windows prefixes with `\\?\`.
 #[cfg(unix)]
 mod empty_scan;
+mod promoted_clearance;
 mod repository_root;
 mod soft_edit_limit;
 mod soft_edit_provenance;

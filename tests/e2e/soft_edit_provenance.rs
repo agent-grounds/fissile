@@ -180,6 +180,12 @@ fn assert_detail(root: &Path, count: usize, limit: usize, complete: bool, clause
         detail.contains(clause),
         "missing staged provenance clause {clause:?}\nactual detail: {detail}"
     );
+    // Only a blocking promotion says what clears it (§FS-004-check-audit.1.4).
+    assert_eq!(
+        detail.contains("to clear,"),
+        code == 1,
+        "the clearing clause belongs to promoted details alone: {detail}"
+    );
 }
 
 #[test]
@@ -191,7 +197,7 @@ fn inherited_ninth_edit_explains_previously_reached_limit() {
         9,
         5,
         true,
-        "soft edits 9/5; promoted to blocking; 8 prior committed over-soft edits + 1 staged edit; prior committed edits already reached the promotion limit",
+        "soft edits 9/5; promoted to blocking; 8 prior committed over-soft edits + 1 staged edit; prior committed edits already reached the promotion limit; to clear, end at or below 20 non-blank lines, 50 away",
     );
 }
 
@@ -204,7 +210,22 @@ fn fifth_edit_explains_first_promotion() {
         5,
         5,
         true,
-        "soft edits 5/5; promoted to blocking; 4 prior committed over-soft edits + 1 staged edit; this staged edit first reaches the promotion limit",
+        "soft edits 5/5; promoted to blocking; 4 prior committed over-soft edits + 1 staged edit; this staged edit first reaches the promotion limit; to clear, end at or below 20 non-blank lines, 46 away",
+    );
+}
+
+/// The last advisory edit has spent nearly all its grace and refuses nothing, so
+/// it has nothing to clear (§FS-004-check-audit.1.4).
+#[test]
+fn fourth_edit_stays_advisory_and_names_nothing_to_clear() {
+    let work = history("advisory-four", 3, 5);
+    stage_two_lines(&work.0);
+    assert_detail(
+        &work.0,
+        4,
+        5,
+        true,
+        "soft edits 4/5; 3 prior committed over-soft edits + 1 staged edit",
     );
 }
 

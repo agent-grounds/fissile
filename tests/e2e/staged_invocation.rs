@@ -54,10 +54,12 @@ hard_message = "hard-stop"
 const PROMOTED_EPILOGUE: &str = "\
 `fissile check --staged` rejected this staged snapshot. Soft-edit promotion
 blocks a commit only when the hook runs that command; a hook that calls
-`fissile check <paths>` keeps soft findings advisory. Split now or record the
-debt with `fissile exception add <path> --severity soft --rule <rule> --kind
-<kind>`. Bypassing such a hook with `--no-verify` leaves the overflow for
-review or CI.";
+`fissile check <paths>` keeps soft findings advisory. A file still over its
+budget is refused even when this edit made it smaller: split so this commit
+ends it at or below the size its line above names, or, where a seam stops short
+of that, record the remainder as debt with `fissile exception add <path>
+--severity soft --rule <rule> --kind <kind>`. Bypassing such a hook with
+`--no-verify` leaves the overflow for review or CI.";
 
 struct Work(PathBuf);
 
