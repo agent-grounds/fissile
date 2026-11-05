@@ -73,6 +73,13 @@ blocking exits and repository work to callers that chose snapshot semantics.
 The base mode is not this alternative: it selects from Git objects and is
 requested by its own flag.
 
+**Let a shrinking edit stay advisory.** A version above soft counts whatever its
+size relative to its parent. Exempting a smaller one would let removing a single
+line buy a commit, so the limit would bound nothing. The refusal says instead
+what clears it and how far away that is (§FS-004-check-audit.1.4), and a split
+whose seam stops short records the remainder as debt, which is the decision the
+limit exists to force.
+
 **Count a branch as one squashed edit.** Replaying `<ref>..HEAD` as one staged
 diff is one edit, but the hook that ran on each of its commits saw one edit per
 commit, so the squashed count passes files the per-commit hook blocked.
