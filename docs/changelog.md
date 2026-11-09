@@ -12,14 +12,15 @@ by hand (§AR-001-ci.8.3). Follow a line to its pull request for the detail,
 including the migration steps a breaking change carries. Releases up to 0.11.0
 were written by hand and keep their prose.
 
-## 1. [0.11.2] — 2026-10-19
+## 1. [0.11.3] — 2026-11-09
 
-- [Measure literal staged paths independently of Git display quoting](https://github.com/agent-grounds/fissile/pull/95) (PR #95)
-- [Judge a branch against its base with check --base \<ref\>, counting soft edits per commit](https://github.com/agent-grounds/fissile/pull/93) (PR #93)
-- [Upgrade grund to 0.18.0 and migrate grounding configuration to v2](https://github.com/agent-grounds/fissile/pull/91) (PR #91)
+- [Validate wildcard exception ceilings against every reachable rule](https://github.com/agent-grounds/fissile/pull/101) (PR #101)
+- [Keep finding blocks separate by measurement unit](https://github.com/agent-grounds/fissile/pull/100) (PR #100)
+- [Say what clears a promoted soft finding and how far away it is](https://github.com/agent-grounds/fissile/pull/97) (PR #97)
 
 ## 2. Older releases
 
+- [0.11.2](changelog/0.11.2.md) — 2026-10-19: Measure literal staged paths independently of Git display quoting
 - [0.11.1](changelog/0.11.1.md) — 2026-10-05: Write release notes from the merged pull requests
 - [0.11.0](changelog/0.11.0.md) — 2026-10-03: - `clean.sh` at the repository root gives back the disk a checkout's builds took: it runs `cargo clean`, then removes every directory holding a valid `CACHEDIR.TAG`, such as a plan's scratch build under `panta/`.
 - [0.10.1](changelog/0.10.1.md) — 2026-09-21: - §FS-004-check-audit.1.2, §FS-004-check-audit.1.4, §FS-002-init.6: staged failures describe the `fissile check --staged` verdict instead of claiming an unknown commit hook blocked a commit, explain that filename-passing snapshot hooks keep soft findings advisory, and document how hook managers enforce bounded soft-edit promotion.
