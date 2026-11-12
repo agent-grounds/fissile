@@ -492,6 +492,16 @@ unchanged `CheckOptions` and `check::run`.
 
 ### 1.6 Literal staged paths
 
+The staged set selects additions, modifications, copies, and rename destinations
+(`ACMR`). Entries whose staged mode is `160000` (gitlinks) are omitted at
+selection: a submodule pointer names a commit and has no file content to measure.
+This applies to submodule additions and bumps regardless of whether the commit
+object is available in the host repository. Neither command reads or measures
+the commit or its patch as file content. Other selected files are checked
+normally; gitlinks produce no measurement, finding, or unmeasurable-path error.
+A gitlink-only staged set prints `ok` for text check and `[]` for JSON measure,
+and both commands exit `0`.
+
 The staged file set preserves Git's literal UTF-8 paths, including non-ASCII
 characters, independently of `core.quotePath` or Git's display quoting. A
 display spelling such as `"docs/caf\303\251.md"` must select the indexed
