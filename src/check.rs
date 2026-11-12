@@ -147,6 +147,22 @@ fn run_mode(
         }
         None => cli::measure_each_with_context(&loaded, staged, &files),
     };
+    // Only named human findings need the bypassed exclusion (§FS-004-check-audit.1).
+    let named_exclusions =
+        if format == Format::Text && matches!(mode, Mode::Snapshot(paths) if !paths.is_empty()) {
+            let exclude = scan::compile_globs(&loaded.config.scan.exclude);
+            measured_files
+                .iter()
+                .filter_map(|file| {
+                    let path = &file.measurement.path;
+                    let rel = path.to_string_lossy().replace('\\', "/");
+                    scan::matching_exclusion(&rel, &exclude)
+                        .map(|pattern| (path.clone(), pattern.to_owned()))
+                })
+                .collect()
+        } else {
+            report::NamedExclusions::new()
+        };
     // Only the Git-selected modes prove and spend edit history (§DF-013-bounded-soft-grace.1).
     let spends_grace = staged || base.is_some();
     let mut contexts = Vec::new();
@@ -250,7 +266,10 @@ fn run_mode(
                 blocked,
                 has_errors: !errors.is_empty(),
             };
-            (render_text_with_soft_edits(&text, &soft_edits), Vec::new())
+            (
+                render_text_with_soft_edits(&text, &soft_edits, &named_exclusions),
+                Vec::new(),
+            )
         }
         // stdout keeps the stable findings shape, so the block about a registry
         // goes to stderr — where it is still the run's own account of why it
@@ -382,15 +401,21 @@ struct Text<'a> {
 
 #[cfg(test)]
 fn render_text(text: &Text<'_>) -> String {
-    render_text_with_soft_edits(text, &[])
+    render_text_with_soft_edits(text, &[], &report::NamedExclusions::new())
 }
 
-fn render_text_with_soft_edits(text: &Text<'_>, soft_edits: &[SoftEdit]) -> String {
-    let mut blocks = report::finding_blocks_with_staged_context(
+/// Carry named exclusions into human details only (§FS-004-check-audit.1).
+fn render_text_with_soft_edits(
+    text: &Text<'_>,
+    soft_edits: &[SoftEdit],
+    named_exclusions: &report::NamedExclusions,
+) -> String {
+    let mut blocks = report::finding_blocks_with_named_exclusions(
         text.outcomes,
         text.color,
         text.contexts,
         soft_edits,
+        named_exclusions,
     );
 
     // The marker is withheld when a file could not be measured: `ok` next to an

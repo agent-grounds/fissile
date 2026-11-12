@@ -25,9 +25,18 @@ pub fn compile_globs(patterns: &[String]) -> Vec<Glob> {
     patterns.iter().map(Glob::new).collect()
 }
 
-/// Whether a repo-relative `/`-path is removed by `[scan].exclude`.
+/// Whether a repo-relative `/`-path is removed by `[scan].exclude` (§FS-001-config.2).
 pub fn is_excluded(path: &str, exclude: &[Glob]) -> bool {
-    exclude.iter().any(|glob| glob.matches(path))
+    matching_exclusion(path, exclude).is_some()
+}
+
+/// Locate the first matching configured entry, so named-path diagnostics and
+/// automatic selection share exclusion semantics (§FS-004-check-audit.1).
+pub(crate) fn matching_exclusion<'a>(path: &str, exclude: &'a [Glob]) -> Option<&'a str> {
+    exclude
+        .iter()
+        .find(|glob| glob.matches(path))
+        .map(Glob::pattern)
 }
 
 /// Walk the configured scan scope and return repo-relative paths to measure,

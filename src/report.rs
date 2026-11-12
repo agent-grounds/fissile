@@ -2,6 +2,7 @@
 //! Runs the checker over measurements, applies the exception registries and the
 //! hard-implies-soft rule, and turns the result into text or JSON.
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 
@@ -173,6 +174,10 @@ pub fn finding_blocks(outcomes: &[Outcome], color: bool) -> Vec<String> {
     finding_blocks_with_context(outcomes, color, &[])
 }
 
+/// Matching scan entries for explicitly named files, carried only to human
+/// details, independently of per-rule measurement context (§FS-004-check-audit.1).
+pub(crate) type NamedExclusions = HashMap<std::path::PathBuf, String>;
+
 /// The command-only context needed to explain a line measurement and to name
 /// the ceiling a plain `fissile exception add` would write, without adding
 /// fields to the public [`Overflow`] or changing the public renderer's
@@ -280,6 +285,18 @@ pub(crate) fn finding_blocks_with_staged_context(
     contexts: &[FindingContext],
     soft_edits: &[SoftEdit],
 ) -> Vec<String> {
+    finding_blocks_with_named_exclusions(outcomes, color, contexts, soft_edits, &HashMap::new())
+}
+
+/// Add per-file explicit exclusion context without changing grouped guidance or
+/// the public outcome and renderer interfaces (§FS-004-check-audit.1).
+pub(crate) fn finding_blocks_with_named_exclusions(
+    outcomes: &[Outcome],
+    color: bool,
+    contexts: &[FindingContext],
+    soft_edits: &[SoftEdit],
+    named_exclusions: &NamedExclusions,
+) -> Vec<String> {
     let mut groups: Vec<Group<'_>> = Vec::new();
 
     for overflow in outcomes
@@ -291,6 +308,7 @@ pub(crate) fn finding_blocks_with_staged_context(
             overflow,
             context: context_for(contexts, overflow),
             soft_edit: soft_edit_for(soft_edits, overflow),
+            scan_exclusion: named_exclusions.get(&overflow.path).map(String::as_str),
         };
         match groups.iter_mut().find(|group| group.accepts(&finding)) {
             Some(group) => group.overflows.push(finding),
@@ -430,6 +448,8 @@ struct Finding<'a> {
     overflow: &'a Overflow,
     context: Option<&'a FindingContext>,
     soft_edit: Option<&'a SoftEdit>,
+    /// Human context for this file only; never a grouping key (§FS-004-check-audit.1).
+    scan_exclusion: Option<&'a str>,
 }
 
 impl Finding<'_> {
@@ -543,6 +563,12 @@ impl<'a> Group<'a> {
                 format!("{path}: {measurement} ({})", clauses.join("; "))
             };
             block.push_str(&format!("\n    {detail}"));
+            // The existing exclusion already works in automatic modes (§FS-004-check-audit.1).
+            if let Some(pattern) = finding.scan_exclusion {
+                block.push_str(&format!(
+                    "; matches [scan].exclude {pattern:?}: measured only because it was named explicitly; check --staged, check --base and audit skip it"
+                ));
+            }
         }
 
         block
