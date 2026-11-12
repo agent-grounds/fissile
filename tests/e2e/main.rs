@@ -21,6 +21,7 @@ mod promoted_clearance;
 mod repository_root;
 mod soft_edit_limit;
 mod soft_edit_provenance;
+mod staged_gitlinks;
 mod staged_invocation;
 mod staged_paths;
 mod unit_grouping;
