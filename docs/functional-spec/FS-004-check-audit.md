@@ -38,6 +38,21 @@ the message ID; the guidance follows once, indented two spaces; the files follow
 indented four. Guidance is never repeated per file — a repo-wide run says what
 to do once and then lists what it applies to (§GOAL-003-friendly-output).
 
+Explicitly named paths are still measured when they match `[scan].exclude`
+(§FS-007-measure.1). Beside each such file's human finding details, identify an
+actual matching configured exclusion entry, using the same glob semantics as
+automatic selection (§FS-001-config.2), explain that the file was measured
+because it was named explicitly, and state that `check --staged`, `check --base`
+and `audit` skip it. This context explains that the existing exclusion already
+works in those modes; shared guidance mentioning exclusion does not ask the
+reader to repair the configuration for this path. In a mixed block, attribute
+this context only to the excluded file, never to ordinary peers or the block
+as a whole. Preserve group identity, order, file counts, and once-per-block
+configured guidance (§FS-001-config.4). This human context changes neither
+selection, measurements, severity, exit status, nor `measure` output. JSON
+records, including their field sets, values, message IDs and rendered configured
+messages, remain unchanged.
+
 ```text
 hard: 2 files over the 550-line budget [rule: rust-source, message: split-rust-hard]
   Must split before more code lands here: move cohesive groups of items into
