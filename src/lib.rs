@@ -17,6 +17,7 @@ pub mod entry;
 pub mod entrypoint;
 pub mod exception;
 pub mod exceptions;
+mod git_diff;
 mod glob;
 mod glob_overlap;
 mod history;

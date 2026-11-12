@@ -8,11 +8,8 @@ use std::io;
 use std::path::Path;
 
 use crate::config::{Scan, Tokens};
-use crate::revision;
 use crate::scan::{self, MeasuredFile};
-
-/// A gitlink's tree mode: a submodule pointer, with no content to measure.
-const GITLINK: &str = "160000";
+use crate::{git_diff, revision};
 
 /// The resolved range a base run judges. `base` and `head` are full SHAs, read
 /// once so selection and history count the same commits (§FS-004-check-audit.1.4).
@@ -138,30 +135,21 @@ pub(crate) fn select(root: &Path, range: &Range, scan_config: &Scan) -> io::Resu
 
 /// Parse `git diff-tree -r -z --raw --no-renames`. Without rename detection a
 /// rename is a deletion of its source and an addition of its destination, which
-/// is exactly the split selection and removal want.
+/// is exactly the split selection and removal want (§FS-004-check-audit.1.5).
 fn parse_raw_diff(raw: &[u8]) -> Selection {
-    let text = String::from_utf8_lossy(raw);
-    let mut fields = text.split('\0').filter(|field| !field.is_empty());
     let mut selection = Selection {
         files: Vec::new(),
         removed: Vec::new(),
     };
-    while let Some(meta) = fields.next() {
-        let Some(path) = fields.next() else { break };
-        // `:<old mode> <new mode> <old blob> <new blob> <status>`
-        let meta: Vec<&str> = meta.trim_start_matches(':').split_whitespace().collect();
-        let [_, new_mode, _, new_blob, status] = meta[..] else {
-            continue;
-        };
-        match status.as_bytes().first() {
-            // Type changes are included on purpose: a link turned into a file is
-            // new content at `HEAD`. A gitlink has none (§FS-004-check-audit.1.5).
-            Some(b'A' | b'M' | b'T') if new_mode != GITLINK => selection.files.push(Selected {
-                path: path.to_owned(),
-                blob: new_blob.to_owned(),
-            }),
-            Some(b'D') => selection.removed.push(path.to_owned()),
-            _ => {}
+    for change in git_diff::parse(raw) {
+        // Type changes are new content at HEAD (§FS-004-check-audit.1.5).
+        if change.selects_content(b"AMT") {
+            selection.files.push(Selected {
+                path: change.path,
+                blob: change.blob,
+            });
+        } else if change.status == b'D' {
+            selection.removed.push(change.path);
         }
     }
     selection
