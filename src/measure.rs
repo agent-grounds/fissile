@@ -13,6 +13,7 @@ use crate::{FileMeasurement, Severity, Unit};
 /// Inputs to a `measure` run.
 #[derive(Clone, Debug)]
 pub struct MeasureOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub staged: bool,

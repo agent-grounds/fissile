@@ -8,11 +8,17 @@
 //! the root by joining it, and a path that locates a config document opens
 //! from where the caller stands.
 //!
-//! The library reads that spelling back. A root made only of `..` steps says
-//! the caller stands that many levels below it: their own paths are rebased
-//! from there (§FS-007-measure.1), and a config they stand beside is the one
-//! passed over (§FS-001-config.8.4). Any other root is a library caller's own,
-//! and the paths handed in with it stay relative to it.
+//! The library reads that spelling back, and so does every `root` a library
+//! caller passes on a command's options. A root made only of `..` steps, `..`
+//! or `../..`, says the caller stands that many levels below it, in the
+//! process's working directory: a path handed in with it is relative to that
+//! directory and is rebased onto the root (§FS-007-measure.1), so `x.py` with
+//! root `..` from `sub/` is `sub/x.py`. A config in that directory is the one
+//! passed over (§FS-001-config.8.4), and a path inside a command a run offers
+//! is spelled from there (§FS-001-config.8.1). Any other root, `.` or an
+//! absolute path included, puts the caller at the root, and the paths handed in
+//! with it stay relative to it. To keep root-relative paths with a root above
+//! the working directory, pass that root absolute.
 
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -111,7 +117,8 @@ impl Invocation {
     }
 
     /// Where the invocation directory sits under the root: empty at the root.
-    pub fn prefix(&self) -> &str {
+    #[cfg(test)]
+    pub(crate) fn prefix(&self) -> &str {
         &self.prefix
     }
 
@@ -152,8 +159,9 @@ fn lexical(path: &Path) -> PathBuf {
 }
 
 /// How many levels below `root` the caller stands, read from its spelling: a
-/// root made only of `..` steps is the invocation context's. Any other root,
-/// `.` included, puts the caller at it.
+/// root made only of `..` steps is the invocation context's (§FS-001-config.8.1),
+/// and the caller's paths are rebased from there (§FS-007-measure.1). Any other
+/// root, `.` included, puts the caller at it.
 pub(crate) fn levels_below(root: &Path) -> usize {
     let mut levels = 0;
     for component in root.components() {

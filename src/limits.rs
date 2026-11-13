@@ -13,6 +13,7 @@ use crate::{Glob, ScopedRule, Selector, Severity, Unit};
 /// Inputs to a `limits` run.
 #[derive(Clone, Debug, Default)]
 pub struct LimitsOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub format: Option<Format>,

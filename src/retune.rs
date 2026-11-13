@@ -16,6 +16,7 @@ use crate::{Severity, Unit};
 /// Inputs to `exception retune`.
 #[derive(Clone, Debug)]
 pub struct RetuneOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub path: String,
