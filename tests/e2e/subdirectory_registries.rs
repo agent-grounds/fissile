@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::root_support::{FOUR_LINES, Scratch, assert_none, lines, same_verdict, write};
+use super::root_support::{FOUR_LINES, Ran, Scratch, assert_none, lines, same_verdict, write};
 
 /// Custom registry paths, and a bump step of 1 so every ceiling is a measurement.
 const REGISTRY_CONFIG: &str = r#"fissile_config_version = 1
@@ -262,4 +262,244 @@ fn issue_103_guard_a_refused_path_is_named_as_the_caller_typed_it() {
         }
     }
     assert_none(&problems, "a refused path was not echoed as typed");
+}
+
+/// The words of one offered command, unquoted as a shell would read them.
+fn words(command: &str) -> Vec<String> {
+    let (mut words, mut word, mut quote) = (Vec::new(), None::<String>, None);
+    for c in command.chars() {
+        match quote {
+            Some(open) if c == open => quote = None,
+            Some(_) => word.get_or_insert_with(String::new).push(c),
+            None if c == '\'' || c == '"' => {
+                quote = Some(c);
+                word.get_or_insert_with(String::new);
+            }
+            None if c.is_whitespace() => words.extend(word.take()),
+            None => word.get_or_insert_with(String::new).push(c),
+        }
+    }
+    words.extend(word);
+    words
+}
+
+/// The offered command line that starts with `head`, as words.
+fn offered_line(ran: &Ran, head: &str) -> Option<Vec<String>> {
+    let line = ran
+        .stderr
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with(head))?;
+    Some(words(line))
+}
+
+/// The backticked fragment that starts with `head`, as words, completed with
+/// the command it belongs to.
+fn offered_fragment(ran: &Ran, command: &[&str], head: &str) -> Option<Vec<String>> {
+    let fragment = ran.stderr.split('`').find(|span| span.starts_with(head))?;
+    let mut offered: Vec<String> = command.iter().map(|word| (*word).to_owned()).collect();
+    offered.extend(words(fragment));
+    Some(offered)
+}
+
+/// `head`, then the soft `py` address every scenario below uses, then `tail`.
+fn soft_py(head: &[&str], tail: &[&str]) -> Vec<String> {
+    head.iter()
+        .chain(&["--severity", "soft", "--rule", "py"])
+        .chain(tail)
+        .map(|arg| (*arg).to_owned())
+        .collect()
+}
+
+fn run(scratch: &Scratch, dir: &Path, args: &[String]) -> Ran {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    scratch.fissile(dir, &args)
+}
+
+/// Run `offered` from `dir` exactly as printed: its placeholders filled the way
+/// the refusal asks, `extra` appended. It must be accepted.
+fn run_offered(
+    scratch: &Scratch,
+    dir: &Path,
+    offered: Option<Vec<String>>,
+    extra: &[String],
+    what: &str,
+) -> Option<String> {
+    let Some(offered) = offered else {
+        return Some(format!("{what}: nothing offered"));
+    };
+    let mut args: Vec<String> = offered
+        .into_iter()
+        .skip_while(|word| word == "fissile")
+        .map(|word| match word.as_str() {
+            "<N>" => "8".to_owned(),
+            "..." => REASON.to_owned(),
+            _ => word,
+        })
+        .collect();
+    args.extend_from_slice(extra);
+    let ran = run(scratch, dir, &args);
+    (ran.code != Some(0)).then(|| format!("{what} was refused as printed:\n{}", ran.report()))
+}
+
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|arg| (*arg).to_owned()).collect()
+}
+
+/// The commands a refusal offers from `sub/` run as printed from `sub/`: the
+/// caller's argument as typed, an exact entry's path spelled from there, and a
+/// glob as written (§FS-001-config.8.1, §FS-008-exception-retune.4,
+/// §FS-009-exception-remove.1). At the root every refusal keeps its bytes.
+#[test]
+fn issue_103_offered_commands_from_a_subdirectory_run_as_printed() {
+    let scratch = Scratch::new("offered");
+    let mut problems = Vec::new();
+    let max_12 = ["--max", "12", "--unit", "lines"];
+
+    // Retune's stated and hard routes: a soft ceiling at the hard limit.
+    let root = registered(&scratch, "routes", 4, &[entry("sub/x.py", "exact", 6)]);
+    let sub = root.join("sub");
+    let at_root = run(
+        &scratch,
+        &root,
+        &soft_py(&["exception", "retune", "sub/x.py"], &max_12),
+    );
+    assert_eq!(
+        at_root.stderr,
+        "fissile exception retune: --max 12 is at or above rule py hard limit 10; a soft \
+         ceiling there silences nothing. Stay under it:\n  \
+         fissile exception retune sub/x.py --severity soft --rule py --max <N> --unit lines\n\
+         with 4 <= N < 10, or accept the file in the hard registry:\n  \
+         fissile exception add sub/x.py --severity hard --rule py --max 12 --unit lines \
+         --kind structural --reason \"...\"\n  \
+         (or --kind deferred --until '<what retires it>')\n",
+        "control: {}",
+        at_root.report()
+    );
+    let below = run(
+        &scratch,
+        &sub,
+        &soft_py(&["exception", "retune", "x.py"], &max_12),
+    );
+    let expected = at_root
+        .stderr
+        .replace("retune sub/x.py", "retune x.py")
+        .replace("add sub/x.py", "add x.py");
+    if below.code != Some(2) || below.stderr != expected {
+        problems.push(format!(
+            "expected the routes to name x.py:\n{}",
+            below.report()
+        ));
+    }
+    problems.extend(run_offered(
+        &scratch,
+        &sub,
+        offered_line(&below, "fissile exception retune"),
+        &strings(&["--dry-run"]),
+        "retune's stated route",
+    ));
+    problems.extend(run_offered(
+        &scratch,
+        &sub,
+        offered_line(&below, "fissile exception add"),
+        &strings(&["--force", "--dry-run"]),
+        "retune's hard route",
+    ));
+
+    // Retune's remove route: the file shrunk under the rule's soft limit.
+    write(&root, "sub/x.py", &lines(1, "x"));
+    let at_root = run(
+        &scratch,
+        &root,
+        &soft_py(&["exception", "retune", "sub/x.py"], &[]),
+    );
+    let below = run(
+        &scratch,
+        &sub,
+        &soft_py(&["exception", "retune", "x.py"], &[]),
+    );
+    let route = "\n  fissile exception remove sub/x.py --severity soft --rule py\n";
+    let expected = at_root.stderr.replace("remove sub/x.py", "remove x.py");
+    if !at_root.stderr.ends_with(route) || below.code != Some(2) || below.stderr != expected {
+        problems.push(format!(
+            "expected the remove route to name x.py:\n{}\n{}",
+            at_root.report(),
+            below.report()
+        ));
+    }
+    problems.extend(run_offered(
+        &scratch,
+        &sub,
+        offered_line(&below, "fissile exception remove"),
+        &strings(&["--dry-run"]),
+        "retune's remove route",
+    ));
+
+    // The exact entry a glob address spans, outside `sub/`: `../other/y.py`.
+    let root = registered(&scratch, "exact", 1, &[entry("other/y.py", "exact", 4)]);
+    let sub = root.join("sub");
+    let max_6 = ["--max", "6", "--unit", "lines"];
+    for (command, y_lines, tail) in [("retune", 4, &max_6[..]), ("remove", 1, &[][..])] {
+        write(&root, "other/y.py", &lines(y_lines, "y"));
+        let address = soft_py(
+            &["exception", command, "other/*.py", "--match", "glob"],
+            tail,
+        );
+        let at_root = run(&scratch, &root, &address);
+        let below = run(&scratch, &sub, &address);
+        let expected = at_root.stderr.replace(
+            "`--match exact other/y.py`",
+            "`--match exact ../other/y.py`",
+        );
+        if !at_root.stderr.contains("`--match exact other/y.py`")
+            || below.code != Some(2)
+            || below.stderr != expected
+        {
+            problems.push(format!(
+                "expected {command} to offer `--match exact ../other/y.py`:\n{}\n{}",
+                at_root.report(),
+                below.report()
+            ));
+        }
+        problems.extend(run_offered(
+            &scratch,
+            &sub,
+            offered_fragment(&below, &["exception", command], "--match exact "),
+            &soft_py(&[], &[tail, &["--dry-run"]].concat()),
+            &format!("{command}'s exact entry"),
+        ));
+    }
+
+    // A glob entry covering the caller's file: the glob is offered as written.
+    let root = registered(&scratch, "glob", 4, &[entry("**/x.py", "glob", 4)]);
+    let sub = root.join("sub");
+    let at_root = run(
+        &scratch,
+        &root,
+        &soft_py(&["exception", "retune", "sub/x.py"], &[]),
+    );
+    let below = run(
+        &scratch,
+        &sub,
+        &soft_py(&["exception", "retune", "x.py"], &[]),
+    );
+    if below.code != Some(2) || below.stderr != at_root.stderr {
+        problems.push(format!(
+            "expected the root's glob refusal:\n{}\n{}",
+            at_root.report(),
+            below.report()
+        ));
+    }
+    problems.extend(run_offered(
+        &scratch,
+        &sub,
+        offered_fragment(&below, &["exception", "retune"], "--match glob "),
+        &soft_py(&[], &["--dry-run"]),
+        "the glob entry",
+    ));
+
+    assert_none(
+        &problems,
+        "an offered command did not run as printed from sub/",
+    );
 }

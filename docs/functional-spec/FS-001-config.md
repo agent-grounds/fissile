@@ -446,8 +446,12 @@ repository-relative spelling from every directory: a finding's file, an
 entry's `path`, a registry as the config names it. A path that locates a config
 document, the one read or one passed over, is the exception. It is spelled so
 that it opens from where the caller stands, so a config error met from `sub/`
-names `../.agent-grounds/fissile.toml`. At the root every such path, and every
-byte a run prints, is what it was before the root was defined.
+names `../.agent-grounds/fissile.toml`. A path inside a command the run offers
+is spelled so that the command runs as printed from where the caller stands:
+the caller's own argument as typed, an exact entry's path spelled from the
+caller's directory (`../other/x.py` from `sub/`), and a glob as written. At the
+root every such path, and every byte a run prints, is what it was before the
+root was defined.
 
 Discovery stops at the first path that is present. A file that exists but does
 not parse is an error naming that file (§FS-001-config.1), not a miss: falling through to the
