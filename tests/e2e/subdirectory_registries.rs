@@ -505,3 +505,86 @@ fn issue_103_offered_commands_from_a_subdirectory_run_as_printed() {
         "an offered command did not run as printed from sub/",
     );
 }
+
+/// Where `got` differs from `want` in its exit code, stdout or stderr.
+fn same_run(want: &Ran, got: &Ran) -> Option<String> {
+    (want.code != got.code || want.stdout != got.stdout || want.stderr != got.stderr)
+        .then(|| format!("expected\n{}\nbut got\n{}", want.report(), got.report()))
+}
+
+/// From `sub/`, a missing path with a `..` step is still an address: a
+/// file-level error that does not stop the run (§FS-004-check-audit.5), the
+/// path a stale exact entry is removed by (§FS-009-exception-remove.1), and
+/// refused only when it leaves the repository (§FS-007-measure.1).
+#[test]
+fn issue_103_a_missing_path_from_a_subdirectory_is_a_file_level_error() {
+    let scratch = Scratch::new("missing-path");
+    let stale = entry("other/gone.py", "exact", 4);
+    let root = registered(&scratch, "missing", 1, &[stale]);
+    write(&root, "y.py", FOUR_LINES);
+    let sub = root.join("sub");
+    let mut problems = Vec::new();
+
+    for command in ["measure", "check"] {
+        let at_root = scratch.fissile(&root, &[command, "gone.py", "y.py", "--no-color"]);
+        let error = format!("fissile {command}: cannot measure gone.py: ");
+        if at_root.code != Some(2)
+            || !at_root.stdout.contains("y.py")
+            || !at_root.stderr.starts_with(&error)
+        {
+            problems.push(format!("control: {}", at_root.report()));
+        }
+        let below = scratch.fissile(&sub, &[command, "../gone.py", "../y.py", "--no-color"]);
+        problems.extend(same_run(&at_root, &below));
+    }
+
+    let at_root = run(
+        &scratch,
+        &root,
+        &soft_py(&["exception", "remove", "other/gone.py"], &["--dry-run"]),
+    );
+    if at_root.code != Some(0) || !at_root.stdout.contains("would remove other/gone.py") {
+        problems.push(format!("control: {}", at_root.report()));
+    }
+    let below = run(
+        &scratch,
+        &sub,
+        &soft_py(&["exception", "remove", "../other/gone.py"], &["--dry-run"]),
+    );
+    problems.extend(same_run(&at_root, &below));
+
+    let glob = soft_py(
+        &["exception", "remove", "other/*.py", "--match", "glob"],
+        &[],
+    );
+    let below = run(&scratch, &sub, &glob);
+    if !below.stderr.contains("`--match exact ../other/gone.py`") {
+        problems.push(format!(
+            "expected `--match exact ../other/gone.py`:\n{}",
+            below.report()
+        ));
+    }
+    problems.extend(run_offered(
+        &scratch,
+        &sub,
+        offered_fragment(&below, &["exception", "remove"], "--match exact "),
+        &soft_py(&[], &["--dry-run"]),
+        "the stale exact entry",
+    ));
+
+    for command in ["measure", "check"] {
+        let ran = scratch.fissile(&sub, &[command, "../../x.py", "--no-color"]);
+        let named = format!("fissile {command}: path `../../x.py` is outside the repository\n");
+        if ran.code != Some(2) || ran.stderr != named {
+            problems.push(format!(
+                "expected `{}`:\n{}",
+                named.trim_end(),
+                ran.report()
+            ));
+        }
+    }
+    assert_none(
+        &problems,
+        "a missing path from sub/ was not a file-level error",
+    );
+}

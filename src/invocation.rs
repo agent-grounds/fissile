@@ -181,6 +181,38 @@ pub(crate) fn caller_prefix(root: &Path) -> io::Result<String> {
     Ok(crate::scan::relative(&top, &here).unwrap_or_default())
 }
 
+/// A path with a `..` step that a caller below `root` typed and the kernel
+/// found missing, folded lexically from the caller's directory onto the root:
+/// `../other/gone.py` from `sub/` is `other/gone.py`, an address measurement
+/// reports as a file-level error (§FS-004-check-audit.5) and a stale exact entry
+/// is found by. A fold that climbs above the root is refused, naming `raw` as
+/// typed (§FS-007-measure.1). Any error but `NotFound`, or a caller directory
+/// that cannot be read, is returned as it came. A missing path that steps back
+/// with `..` after a symlink folds as written, not where the link leads: the
+/// trade the resolved `--config` makes too.
+pub(crate) fn fold_missing(root: &Path, raw: &str, error: io::Error) -> io::Result<String> {
+    if error.kind() != io::ErrorKind::NotFound {
+        return Err(error);
+    }
+    let Ok(prefix) = caller_prefix(root) else {
+        return Err(error);
+    };
+    let folded = lexical(&Path::new(&prefix).join(raw));
+    if folded.components().next() == Some(Component::ParentDir) {
+        return Err(outside_repository(raw));
+    }
+    Ok(folded.to_string_lossy().replace('\\', "/"))
+}
+
+/// The refusal of a path that leaves the repository, naming it as the caller
+/// typed it (§FS-007-measure.1).
+pub(crate) fn outside_repository(raw: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("path `{raw}` is outside the repository"),
+    )
+}
+
 /// A repository path spelled from where the caller stands, so a command that
 /// offers it runs as printed (§FS-001-config.8.1): the inverse of the rebase
 /// [`crate::scan::normalize_repo_path`] applies. From `sub/`, `sub/x.py` is
