@@ -837,15 +837,16 @@ When the scan scope selects no files at all, `audit` writes one note on stderr
 saying so, in every format and under any `--only` selection:
 
 ```text
-fissile audit: the scan selected no files in /work/outer/proj, inside the git repository at /work/outer; nothing was measured
+fissile audit: the scan selected no files in /work/repo, inside the git repository at /work/repo; nothing was measured
 ```
 
-The note names the directory audit resolved its scope against and, when that
-directory sits inside a git repository, that repository's root, both as
-absolute paths. The root is there because the usual way to land here is a
-directory the enclosing repository ignores, so every file is filtered out
-(§FS-001-config.2) without anything in the directory looking wrong. Outside a
-git repository the note ends at the directory.
+The note names the directory audit resolved its scope against and, inside a
+git repository, that repository's root, both absolute. Inside a work tree both
+are the root, from whichever directory audit ran (§FS-001-config.8.1), and a
+directory the repository ignores is no way in: audit run there audits the
+repository. The usual way to land here is a scope that names nothing the
+repository holds, or ignore files that filter every file out (§FS-001-config.2).
+Outside a git repository the note ends at the directory.
 
 Stdout does not change. A passing text run still prints exactly the success
 marker (§GOAL-003-friendly-output.1), `--only top` still prints nothing, the

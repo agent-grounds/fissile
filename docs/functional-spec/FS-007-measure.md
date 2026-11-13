@@ -27,6 +27,14 @@ takes the literal file set from git independently of display quoting and applies
 measured as passed (§FS-004-check-audit.1). `measure` has no `--base`: a branch's
 verdict is `check --base` (§FS-004-check-audit.1.5).
 
+An explicit path, in either command, is relative to the directory the caller
+stands in. It is measured and reported relative to the repository root
+(§FS-001-config.8.1): from `sub/`, `fissile measure x.py` reports `sub/x.py`, and
+`fissile measure ../y.py` measures `y.py`. A refused path is named exactly as
+the caller typed it, not as the path it was rebased to. From `sub/`,
+`fissile measure ../../x.py` says ``path `../../x.py` is outside the
+repository``.
+
 `measure` is an inspection surface, not a gate. It exits `0` whatever it finds,
 including a file over a hard limit. Only a run-level failure or an unmeasurable
 path exits `2`, on the same terms as every other command

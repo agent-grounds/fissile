@@ -93,10 +93,18 @@ guessing which document broke (§GOAL-003-friendly-output.1).
 
 `[scan]` controls whole-repo audit traversal:
 
-- `include`: root directories or globs walked by `audit`;
+- `include`: root directories or globs walked by `audit` and by a `check` that
+  names no files;
 - `exclude`: globs ignored before measurement;
 - `respect_gitignore`: whether repository ignore files participate in traversal,
   default `true`.
+
+Every `include` entry resolves from the repository root (§FS-001-config.8.1),
+never from the directory the command was started in. A run that walks the scope
+sees the whole scope from every directory of the work tree: with
+`include = ["src"]`, `audit` started in `src/` walks `src`, not `src/src`, and
+says what it says at the root. Where the command starts selects nothing; the
+paths a caller names do (§FS-007-measure.1).
 
 Pre-commit checks and `check --base <ref>` receive their file set from git and
 do not use `include` or gitignore, but they still apply `exclude` so generated
@@ -330,6 +338,12 @@ registries:
   (§FS-004-check-audit.2), and `error` fails whichever run raised it — including
   a commit, through the pre-commit hook.
 
+Both registry paths are relative to the repository root (§FS-001-config.8.1).
+They are not relative to the config file, or to the directory the command was
+started in. Every command reads the registries there, and `exception add`,
+`retune` and `remove` write them there, from whichever directory of the work
+tree they run.
+
 `[exceptions.bump]` sets the step each unit's ceilings are quantized to:
 
 ```toml
@@ -374,6 +388,10 @@ not configurable (§GOAL-003-friendly-output).
 cannot be evaluated unless the caller supplies token measurements directly. With
 `enabled = true`, `command` names an external counter command. `{path}` is
 substituted with the file path. The command must print one integer token count.
+It runs with the repository root (§FS-001-config.8.1) as its working directory,
+whichever directory `fissile` was started from. So a counter the config names by
+a repository-relative path is found from every directory, as is the path it is
+handed.
 
 The default build does not bundle a tokenizer model (§GOAL-002-tiny-footprint).
 
@@ -385,6 +403,14 @@ kept there is one the toolchain that owns it cannot maintain
 (§DF-012-config-home). `.agents/fissile.toml` remains readable so that no
 repository breaks on upgrade, and every run that reads it says it should move.
 
+Discovery speaks for itself. It reports a deprecated home
+(§FS-001-config.8.2), a config passed over at the root (§FS-001-config.8.3) or
+below it (§FS-001-config.8.4), and a run on the built-in defaults
+(§FS-001-config.8.5). Those lines are built in one place, from the root the run
+loaded. So every command that discovers a config prints the same lines, in the
+order of the points that define them. They go to stderr before anything the
+run found, and none of them changes stdout or an exit code.
+
 ### 8.1 Discovery Order
 
 Without an explicit path, `fissile` uses the first of these that exists:
@@ -393,13 +419,49 @@ Without an explicit path, `fissile` uses the first of these that exists:
 2. `<root>/.agents/fissile.toml`;
 3. the built-in defaults (§FS-001-config.0).
 
+`<root>` is the top of the Git work tree the command was started in, from
+whichever of its directories. Run from `sub/`, `fissile` reads the document it
+reads at the top and holds the repository to it: where the shell stands never
+changes the policy that governs the repository. The root is not the nearest
+directory holding a config. That would let a subdirectory's config decide the
+verdict on the repository-wide file set `check --staged` takes from Git
+(§FS-004-check-audit.1.6). Git draws the boundary:
+
+- a nested repository or a submodule is its own root, whether or not it holds a
+  config, and discovery never continues into the repository around it;
+- a linked worktree's root is its own checkout, not the main worktree's;
+- outside a Git work tree, or when Git cannot answer, the root is the directory
+  the command was started in, and no ancestor is searched.
+
+A directory the enclosing repository ignores is part of that repository unless
+it is a repository itself, as it is for `git status`. Run there, `fissile`
+governs the enclosing repository. To hold such a directory to its own config,
+`git init` it, or set `GIT_CEILING_DIRECTORIES` so that Git does not find the
+repository around it.
+
+Every repository-relative path a run reads is resolved from the root: the scan
+scope (§FS-001-config.2), the registries (§FS-001-config.5) and the token
+counter (§FS-001-config.7). What a run reports about the repository keeps its
+repository-relative spelling from every directory: a finding's file, an
+entry's `path`, a registry as the config names it. A path that locates a config
+document, the one read or one passed over, is the exception. It is spelled so
+that it opens from where the caller stands, so a config error met from `sub/`
+names `../.agent-grounds/fissile.toml`. At the root every such path, and every
+byte a run prints, is what it was before the root was defined.
+
 Discovery stops at the first path that is present. A file that exists but does
 not parse is an error naming that file (§FS-001-config.1), not a miss: falling through to the
 next candidate would govern the repository by a document the reader did not
 mean to be in force, and say nothing about the one they were editing.
 
-An explicit `--config <path>` is not discovery. The named file must exist, it is
-read as given, and it carries no deprecation warning even when it names
+An explicit `--config <path>` is not discovery. A relative path is resolved
+once, against the directory the command was started in, and that one file is
+what the whole run reads: the current tree and, under `audit --history`, every
+revision (§FS-004-check-audit.2.1). `--config x.toml` from `sub/` is `sub/x.toml`
+in both. It changes which document is read, not the root its paths resolve
+from. A file outside the work tree still loads for the current tree, and
+`--history` still refuses it. The named file must exist, it is read as given,
+and it carries no deprecation warning even when it names
 `.agents/fissile.toml` — the caller said which document to read, so nothing is
 being chosen behind them (§FS-002-init.1, §DF-002-explicit-config).
 
@@ -410,6 +472,14 @@ warning line, naming both paths and the move:
 
 ```text
 fissile: warning: .agents/fissile.toml is deprecated; move it to .agent-grounds/fissile.toml
+```
+
+That is the line at the root, byte for byte. From below the root
+(§FS-001-config.8.1) both paths are spelled from where the caller stands, so
+the move it names can be made from there:
+
+```text
+fissile: warning: ../.agents/fissile.toml is deprecated; move it to ../.agent-grounds/fissile.toml
 ```
 
 The line goes to stderr in every mode, including `--format json`. Stdout carries
@@ -437,7 +507,68 @@ line naming the file it ignored and the one in force.
 fissile: warning: .agents/fissile.toml is ignored; .agent-grounds/fissile.toml is the config in effect
 ```
 
+From below the root both paths are spelled from where the caller stands, as in
+§FS-001-config.8.2: `../.agents/fissile.toml is ignored;
+../.agent-grounds/fissile.toml is the config in effect`.
+
 A config being edited to no effect is the one failure this move could introduce,
 and it is invisible from outside: every run succeeds, every rule the reader
 wrote is missing from it, and nothing says why. One line is what separates that
 from a five-minute answer.
+
+### 8.4 A Config Below the Root
+
+Discovery reads the root (§FS-001-config.8.1), so a config in the invocation
+directory, the one the command was started in, is not read when that directory
+is below the root. For
+the reason §FS-001-config.8.3 gives, that is stated rather than silent: the run
+emits one warning line. It names the file passed over and what is in effect
+instead, each spelled from where the caller stands.
+
+```text
+fissile: warning: .agent-grounds/fissile.toml is ignored; discovery reads the repository root, and ../.agent-grounds/fissile.toml is the config in effect
+```
+
+What is in effect is the document discovery read at the root, which is
+`../.agents/fissile.toml` when that is the one. When the root has neither, the
+line ends `and the built-in defaults are in effect`.
+
+Either home counts. A `.agents/fissile.toml` in the invocation directory is
+passed over the same way and named the same way. When both are there, the line
+names `.agent-grounds/fissile.toml`, the one discovery would read in that
+directory (§FS-001-config.8.3), and it is still one line, never two. Only the
+invocation directory is looked at, not the directories between it and the root.
+
+There is no such line at the root, or outside a Git work tree, where the
+invocation directory is the root. There is none with `--config` either: it names
+the document itself, and it is still how a caller selects the file passed over.
+Like §FS-001-config.8.2 the line goes to stderr in every mode and changes no
+exit code.
+
+### 8.5 The Built-in Defaults Are Announced
+
+A run that found no config at the root (§FS-001-config.8.1), and so holds the
+repository to the built-in defaults (§FS-001-config.0), says so in one line on
+stderr:
+
+```text
+fissile: note: no .agent-grounds/fissile.toml in /work/repo; using the built-in defaults
+```
+
+The path is the root, absolute. Which directory was searched is exactly what is
+in question, as in §FS-004-check-audit.2.2: a run that landed on the defaults
+because it started outside the repository it meant is told so by that path. The
+line names the home a config should be created at, not the deprecated one,
+though both were looked for.
+
+The note is said where a deprecation warning would be (§FS-001-config.8.2): by
+every command that discovers a config, in text and JSON, dry runs included, once
+per run, before stdout. It is not said by `init`, `--help` or `--version`, which
+discover nothing. A run that aborts with a run-level error does not say it
+either: it prints only its diagnostic (§FS-004-check-audit.5). Like a
+deprecation warning it is said and never charged. Stdout, the success marker
+and every exit code are exactly what they would be without it.
+
+An explicit `--config` prints no note, even when it names a copy of the
+defaults. Neither does a config that omits fields: an omitted field takes its
+default (§FS-001-config.0), but the document is the repository's own.
