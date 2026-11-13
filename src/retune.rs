@@ -156,7 +156,7 @@ pub fn run(options: &RetuneOptions) -> Result<Run, CommandError> {
                 ),
                 note,
             ),
-            notes: cli::config_notes(&loaded.source),
+            notes: cli::config_notes(&loaded.source, &loaded.root),
         });
     }
 
@@ -176,14 +176,14 @@ pub fn run(options: &RetuneOptions) -> Result<Run, CommandError> {
                 format!("{change}\nwould update {}", registry_rel.display()),
                 note,
             ),
-            notes: cli::config_notes(&loaded.source),
+            notes: cli::config_notes(&loaded.source, &loaded.root),
         });
     }
 
     fs::write(&registry_path, &new_text)?;
     Ok(Run {
         output: with_note(change, note),
-        notes: cli::config_notes(&loaded.source),
+        notes: cli::config_notes(&loaded.source, &loaded.root),
     })
 }
 

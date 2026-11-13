@@ -25,21 +25,23 @@ pub const CONFIG_HOME: &str = ".agent-grounds/fissile.toml";
 /// (§FS-001-config.8, §DF-012-config-home).
 pub const DEPRECATED_CONFIG_HOME: &str = ".agents/fissile.toml";
 
-/// Said once, on stderr, by a run discovery landed on the old home
-/// (§FS-001-config.8.2).
+/// Said once, on stderr, by a run at the root that discovery landed on the old
+/// home (§FS-001-config.8.2). `cli::config_notes` builds it, spelled from the
+/// caller below the root; `init`, which does not discover, says it as is.
 pub const DEPRECATED_WARNING: &str =
     "fissile: warning: .agents/fissile.toml is deprecated; move it to .agent-grounds/fissile.toml";
 
 /// Said instead when a config sits at both paths: the precedence is stated
 /// rather than left for the reader to discover from a rule that never fires
-/// (§FS-001-config.8.3).
+/// (§FS-001-config.8.3). These are the bytes at the root; `cli::config_notes`
+/// builds the line.
 pub const IGNORED_WARNING: &str = "fissile: warning: .agents/fissile.toml is ignored; \
                                    .agent-grounds/fissile.toml is the config in effect";
 
 /// Which document the effective config came from (§FS-001-config.8.1). Carried
-/// out of discovery because the deprecation belongs to discovery rather than to
-/// any one command, and only the command surface owns stderr
-/// (§FS-001-config.8.2).
+/// out of discovery because what discovery says belongs to it rather than to any
+/// one command, and only the command surface owns stderr: `cli::config_notes`
+/// turns it into lines (§FS-001-config.8).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConfigSource {
     /// A path the caller named. Not discovery: the caller said which document to
@@ -52,20 +54,6 @@ pub enum ConfigSource {
     Deprecated,
     /// No config document under the root: the built-in defaults (§FS-001-config.0).
     BuiltIn,
-}
-
-impl ConfigSource {
-    /// The one warning line this run owes the reader, or `None` when the config
-    /// came from somewhere that needs no comment (§FS-001-config.8.2, §FS-001-config.8.3).
-    pub fn deprecation(&self) -> Option<&'static str> {
-        match self {
-            ConfigSource::Deprecated => Some(DEPRECATED_WARNING),
-            ConfigSource::Home {
-                shadows_deprecated: true,
-            } => Some(IGNORED_WARNING),
-            _ => None,
-        }
-    }
 }
 
 /// A parsed, validated config document.

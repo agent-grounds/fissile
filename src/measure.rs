@@ -102,7 +102,7 @@ pub fn run(options: &MeasureOptions) -> Result<Run, CommandError> {
     };
     Ok(Run {
         output,
-        notes: cli::config_notes(&loaded.source),
+        notes: cli::config_notes(&loaded.source, &loaded.root),
         errors,
     })
 }

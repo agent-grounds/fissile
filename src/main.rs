@@ -10,6 +10,7 @@ use fissile::audit::{self, AuditOptions, Section};
 use fissile::check::{self, BaseCheckOptions, CheckOptions};
 use fissile::cli::Format;
 use fissile::init::{self, AgentTargets, HookMode, InitOptions};
+use fissile::invocation::{self, Invocation};
 use fissile::limits::{self, LimitsOptions};
 use fissile::measure::{self, MeasureOptions};
 
@@ -110,6 +111,11 @@ fn run_init(args: &[String]) -> ExitCode {
     let dry_run = options.dry_run;
     match init::run(&options) {
         Ok(report) => {
+            // `init` writes where it is told, and says when that is below a work
+            // tree's root, whose config is the one discovery reads (§FS-002-init.1).
+            if let Some(warning) = invocation::below_root_warning(&options.root) {
+                eprintln!("{warning}");
+            }
             // `init` does not discover, so the deprecation is its own to say: a
             // repository whose config it found at the old home hears it from
             // nowhere else (§FS-001-config.8.2, §FS-002-init.2).
@@ -214,17 +220,22 @@ fn run_check(args: &[String]) -> ExitCode {
         Ok(None) => return ExitCode::SUCCESS,
         Err(code) => return code,
     };
+    // Every command reads the root of the work tree it was started in
+    // (§FS-001-config.8.1).
+    let invocation = Invocation::resolve();
+    let root = invocation.root().to_path_buf();
+    let config_path = invocation.config_path(parsed.config_path);
     let result = match parsed.base {
         Some(base) => check::run_base(&BaseCheckOptions {
-            root: PathBuf::from("."),
-            config_path: parsed.config_path,
+            root,
+            config_path,
             base,
             format: parsed.format,
             no_color: parsed.no_color,
         }),
         None => check::run(&CheckOptions {
-            root: PathBuf::from("."),
-            config_path: parsed.config_path,
+            root,
+            config_path,
             staged: parsed.staged,
             format: parsed.format,
             no_color: parsed.no_color,
@@ -250,9 +261,10 @@ fn run_measure(args: &[String]) -> ExitCode {
         Ok(None) => return ExitCode::SUCCESS,
         Err(code) => return code,
     };
+    let invocation = Invocation::resolve();
     let options = MeasureOptions {
-        root: PathBuf::from("."),
-        config_path: parsed.config_path,
+        root: invocation.root().to_path_buf(),
+        config_path: invocation.config_path(parsed.config_path),
         staged: parsed.staged,
         format: parsed.format,
         no_color: parsed.no_color,
@@ -301,10 +313,7 @@ fn finish_run(
 }
 
 fn run_audit(args: &[String]) -> ExitCode {
-    let mut options = AuditOptions {
-        root: PathBuf::from("."),
-        ..AuditOptions::default()
-    };
+    let mut options = AuditOptions::default();
     let mut iter = args.iter();
 
     while let Some(arg) = iter.next() {
@@ -371,6 +380,11 @@ fn run_audit(args: &[String]) -> ExitCode {
             AUDIT_USAGE,
         );
     }
+    // One resolved `--config` for the current tree and every `--history`
+    // revision (§FS-001-config.8.1).
+    let invocation = Invocation::resolve();
+    options.root = invocation.root().to_path_buf();
+    options.config_path = invocation.config_path(options.config_path.take());
 
     match audit::run(&options) {
         Ok(run) => finish_run("audit", &run.output, run.failed, &run.notes, &run.errors),
@@ -385,10 +399,7 @@ fn run_audit(args: &[String]) -> ExitCode {
 /// `--staged` — the answer does not depend on a file set, so an argument is a
 /// usage error rather than a filter.
 fn run_limits(args: &[String]) -> ExitCode {
-    let mut options = LimitsOptions {
-        root: PathBuf::from("."),
-        ..LimitsOptions::default()
-    };
+    let mut options = LimitsOptions::default();
     let mut iter = args.iter();
 
     while let Some(arg) = iter.next() {
@@ -419,6 +430,9 @@ fn run_limits(args: &[String]) -> ExitCode {
         }
     }
 
+    let invocation = Invocation::resolve();
+    options.root = invocation.root().to_path_buf();
+    options.config_path = invocation.config_path(options.config_path.take());
     match limits::run(&options) {
         // Never a gate: the inventory is an answer, and the config loading is
         // the whole of what can go wrong (§FS-010-limits.1).

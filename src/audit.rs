@@ -312,7 +312,7 @@ pub fn run(options: &AuditOptions) -> Result<Run, CommandError> {
         }
         Format::Json => render_json(&outcomes, &contexts, &inventory, history.as_ref()),
     };
-    let mut notes = cli::config_notes(&loaded.source);
+    let mut notes = cli::config_notes(&loaded.source, &loaded.root);
     if scanned_nothing {
         notes.push(empty_scan_note(&loaded.root));
     }

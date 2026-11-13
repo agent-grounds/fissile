@@ -129,14 +129,14 @@ pub fn run(options: &RemoveOptions) -> Result<Run, CommandError> {
                 format!("{head}\nwould update {}", registry_rel.display()),
                 note,
             ),
-            notes: cli::config_notes(&loaded.source),
+            notes: cli::config_notes(&loaded.source, &loaded.root),
         });
     }
 
     fs::write(&registry_path, &new_text)?;
     Ok(Run {
         output: with_note(head, note),
-        notes: cli::config_notes(&loaded.source),
+        notes: cli::config_notes(&loaded.source, &loaded.root),
     })
 }
 
