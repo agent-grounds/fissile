@@ -199,13 +199,18 @@ pub fn normalize_repo_path(root: &Path, raw: &str) -> io::Result<String> {
         }
         .canonicalize()
         // Name the argument: the caller may have passed several (§FS-004-check-audit.5).
-        .map_err(|error| io::Error::new(error.kind(), format!("{raw}: {error}")))?;
-        return relative(&root, &full).map(root_as_dot).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("path `{raw}` is outside the repository"),
-            )
-        });
+        .map_err(|error| io::Error::new(error.kind(), format!("{raw}: {error}")));
+        let full = match full {
+            Ok(full) => full,
+            // Missing below the root: folded (§FS-004-check-audit.5, §FS-007-measure.1).
+            Err(error) if below && !path.is_absolute() => {
+                return crate::invocation::fold_missing(&root, &raw, error).map(root_as_dot);
+            }
+            Err(error) => return Err(error),
+        };
+        return relative(&root, &full)
+            .map(root_as_dot)
+            .ok_or_else(|| crate::invocation::outside_repository(&raw));
     }
 
     let rel = clean_relative_path(path).ok_or_else(|| {

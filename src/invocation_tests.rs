@@ -228,6 +228,44 @@ fn an_offered_path_below_the_root_runs_as_printed() {
     );
 }
 
+fn missing() -> io::Error {
+    io::Error::from(io::ErrorKind::NotFound)
+}
+
+#[test]
+fn a_missing_path_below_the_root_is_folded_onto_it() {
+    // The unit tests run one level below `..`, so the caller's prefix is `here`.
+    let here = here_name();
+    let parent = Path::new("..");
+    let folded = |raw: &str| fold_missing(parent, raw, missing()).unwrap();
+    // Inside the caller's directory, and out of it but still in the repository.
+    assert_eq!(folded("no-such-dir/../gone.rs"), format!("{here}/gone.rs"));
+    assert_eq!(folded("../other/gone.py"), "other/gone.py");
+    // Through the rebase: a file-level error for measurement, not a refusal.
+    assert_eq!(
+        normalize_repo_path(parent, "../fissile-103-no-such/gone.py").unwrap(),
+        "fissile-103-no-such/gone.py"
+    );
+}
+
+#[test]
+fn a_missing_path_folded_above_the_root_is_named_as_typed() {
+    let error = fold_missing(Path::new(".."), "../../gone.py", missing()).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    assert_eq!(
+        error.to_string(),
+        "path `../../gone.py` is outside the repository"
+    );
+}
+
+#[test]
+fn only_a_missing_path_is_folded() {
+    let denied = io::Error::new(io::ErrorKind::PermissionDenied, "../gone.py: denied");
+    let error = fold_missing(Path::new(".."), "../gone.py", denied).unwrap_err();
+    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+    assert_eq!(error.to_string(), "../gone.py: denied");
+}
+
 /// Real repositories. Unix-only: Git names a Windows root `C:/...`, which no
 /// canonical path compares with.
 #[cfg(unix)]
