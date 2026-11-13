@@ -173,6 +173,36 @@ pub(crate) fn caller_prefix(root: &Path) -> io::Result<String> {
     Ok(crate::scan::relative(&top, &here).unwrap_or_default())
 }
 
+/// A repository path spelled from where the caller stands, so a command that
+/// offers it runs as printed (§FS-001-config.8.1): the inverse of the rebase
+/// [`crate::scan::normalize_repo_path`] applies. From `sub/`, `sub/x.py` is
+/// `x.py` and `other/x.py` is `../other/x.py`. At the root, and for any root
+/// not made only of `..` steps, the path is returned unchanged.
+pub(crate) fn spelled_from_caller(root: &Path, path: &str) -> String {
+    if levels_below(root) == 0 {
+        return path.to_owned();
+    }
+    match caller_prefix(root) {
+        Ok(prefix) => relative_to(&prefix, path),
+        // The way up and then down again still runs from where the caller stands.
+        Err(_) => document_prefix(root) + path,
+    }
+}
+
+/// `path` as seen from `prefix`, both repository-relative and written with `/`.
+fn relative_to(prefix: &str, path: &str) -> String {
+    let here: Vec<&str> = prefix.split('/').filter(|step| !step.is_empty()).collect();
+    let there: Vec<&str> = path.split('/').filter(|step| !step.is_empty()).collect();
+    let shared = here.iter().zip(&there).take_while(|(a, b)| a == b).count();
+    let mut steps = vec![".."; here.len() - shared];
+    steps.extend(&there[shared..]);
+    if steps.is_empty() {
+        crate::scan::REPOSITORY_ROOT.to_owned()
+    } else {
+        steps.join("/")
+    }
+}
+
 /// What a path that locates a config document starts with, so it opens from
 /// where the caller stands (§FS-001-config.8.1): nothing at the root, so a run
 /// there keeps its bytes, and the root with a `/` anywhere else, `../` below

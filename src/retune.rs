@@ -9,6 +9,7 @@ use crate::cli::{self, CommandError, Loaded};
 use crate::entry::{self, Address, Sizing};
 use crate::exception::shell_quote;
 use crate::exceptions::{Exception, MatchKind};
+use crate::invocation;
 use crate::toml_lines;
 use crate::{Severity, Unit};
 
@@ -86,7 +87,8 @@ pub fn run(options: &RetuneOptions) -> Result<Run, CommandError> {
                  class-wide entry",
                 registry_rel.display(),
                 existing.path,
-                existing.path
+                // Offered, so spelled from the caller (§FS-001-config.8.1).
+                invocation::spelled_from_caller(&loaded.root, &existing.path)
             )));
         }
         _ => {}
@@ -110,7 +112,7 @@ pub fn run(options: &RetuneOptions) -> Result<Run, CommandError> {
         &base,
         &format!(
             "remove the entry rather than retuning it:\n  {}",
-            remove_route(options, &path)
+            remove_route(options)
         ),
     )?;
     let step = loaded.config.exceptions.bump.step(unit);
@@ -137,7 +139,7 @@ pub fn run(options: &RetuneOptions) -> Result<Run, CommandError> {
         &base,
         ceiling,
         step,
-        &routes(options, &path, unit, ceiling),
+        &routes(options, unit, ceiling),
     )?;
     let suggested = entry::suggested_step(&base, step, binding.map(|binding| binding.hard));
     let detail = ceiling_detail(&base, ceiling, step, unit, suggested);
@@ -212,14 +214,15 @@ fn ceiling_detail(
 
 /// The commands a hard-limit refusal offers (§FS-008-exception-retune.4): this
 /// address with `--max <N> --unit <unit>`, and the hard-severity `add` carrying
-/// the ceiling, so the printed route runs as printed.
+/// the ceiling, so the printed route runs as printed. The path is the caller's
+/// argument as typed, which runs from where they stand (§FS-001-config.8.1).
 //
 // Without --max the rerun would measure the file, find it under the hard limit,
 // and be refused for needing no exception. The kind is the caller's claim to
 // make, so both spellings are named rather than one chosen, since only the
 // deferred kind takes --until.
-fn routes(options: &RetuneOptions, path: &str, unit: Unit, ceiling: u64) -> entry::Routes {
-    let path = shell_quote(path);
+fn routes(options: &RetuneOptions, unit: Unit, ceiling: u64) -> entry::Routes {
+    let path = shell_quote(&options.path);
     let flags = address_flags(options);
     entry::Routes {
         stated: format!(
@@ -254,11 +257,12 @@ fn address_flags(options: &RetuneOptions) -> String {
 
 /// The `exception remove` call for this address (§FS-009-exception-remove.1),
 /// offered where a ceiling has fallen under the limit it exists to accept and
-/// there is nothing left to retune.
-fn remove_route(options: &RetuneOptions, path: &str) -> String {
+/// there is nothing left to retune. It names the caller's argument as typed,
+/// so it runs from where they stand (§FS-001-config.8.1).
+fn remove_route(options: &RetuneOptions) -> String {
     format!(
         "fissile exception remove {} --severity {}{}",
-        shell_quote(path),
+        shell_quote(&options.path),
         options.severity,
         address_flags(options)
     )

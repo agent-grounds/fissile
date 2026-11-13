@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::{self, CommandError, Loaded};
 use crate::entry::{self, Address};
 use crate::exceptions::{Exception, MatchKind, Registries, RegistrySource, RemovalEntry};
+use crate::invocation;
 use crate::report::{self, EvalError};
 use crate::toml_lines;
 use crate::{FileMeasurement, Glob, RuleHit, Severity, Unit, scan};
@@ -82,7 +83,13 @@ pub fn run(options: &RemoveOptions) -> Result<Run, CommandError> {
         )));
     };
     let existing = existing.clone();
-    check_matcher(&existing, options.match_kind, &path, &registry_rel)?;
+    check_matcher(
+        &existing,
+        options.match_kind,
+        &path,
+        &registry_rel,
+        &loaded.root,
+    )?;
 
     // What the registry holds once the entry is gone. The refusal below reads it,
     // and the write is held to producing exactly this (§FS-009-exception-remove.5).
@@ -221,6 +228,7 @@ fn check_matcher(
     addressed: MatchKind,
     path: &str,
     registry_rel: &Path,
+    root: &Path,
 ) -> Result<(), CommandError> {
     match (existing.match_kind(), addressed) {
         // Deleting the class-wide entry from under one member drops the ceiling
@@ -240,7 +248,8 @@ fn check_matcher(
              removed as `--match exact {}`",
             registry_rel.display(),
             existing.path(),
-            existing.path()
+            // Offered, so spelled from the caller (§FS-001-config.8.1).
+            invocation::spelled_from_caller(root, existing.path())
         ))),
         _ => Ok(()),
     }

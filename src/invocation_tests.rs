@@ -180,6 +180,54 @@ fn a_library_callers_root_keeps_its_paths_relative_to_it() {
     assert_eq!(normalize_repo_path(Path::new("."), "x.py").unwrap(), "x.py");
 }
 
+#[test]
+fn an_offered_path_is_unchanged_at_the_root_and_for_a_library_root() {
+    let library = std::env::temp_dir().join("fissile-library-root");
+    for root in [
+        Path::new("."),
+        Path::new(""),
+        Path::new("../x"),
+        library.as_path(),
+    ] {
+        for path in ["sub/x.py", "x.py", "other/deep/y.py"] {
+            assert_eq!(spelled_from_caller(root, path), path, "{root:?} {path}");
+        }
+    }
+}
+
+#[test]
+fn an_offered_path_is_spelled_from_where_the_caller_stands() {
+    // Below the root, inside and outside the caller's own directory.
+    for (prefix, path, spelled) in [
+        ("sub", "sub/x.py", "x.py"),
+        ("sub/", "sub/deep/x.py", "deep/x.py"),
+        ("sub", "other/x.py", "../other/x.py"),
+        ("sub/deep", "sub/x.py", "../x.py"),
+        ("sub/deep", "other/x.py", "../../other/x.py"),
+        ("sub", "subway/x.py", "../subway/x.py"),
+        ("sub", "sub", "."),
+        ("", "sub/x.py", "sub/x.py"),
+    ] {
+        assert_eq!(relative_to(prefix, path), spelled, "{prefix:?} {path}");
+    }
+}
+
+#[test]
+fn an_offered_path_below_the_root_runs_as_printed() {
+    // The unit tests run one level below `..`: the inverse of the rebase.
+    let here = here_name();
+    let parent = Path::new("..");
+    for path in [format!("{here}/Cargo.toml"), format!("{here}/src/lib.rs")] {
+        let spelled = spelled_from_caller(parent, &path);
+        assert!(!spelled.starts_with(&here), "{spelled}");
+        assert_eq!(normalize_repo_path(parent, &spelled).unwrap(), path);
+    }
+    assert_eq!(
+        spelled_from_caller(parent, "elsewhere/x.py"),
+        "../elsewhere/x.py"
+    );
+}
+
 /// Real repositories. Unix-only: Git names a Windows root `C:/...`, which no
 /// canonical path compares with.
 #[cfg(unix)]
