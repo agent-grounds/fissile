@@ -35,6 +35,17 @@ committer dates, then exercises debt movement, continuous ages, rename evidence,
 and all-or-nothing refusals through the real binary
 (§FS-004-check-audit.2.1).
 
+Where the config is found depends on where the command starts, so a static tree
+cannot show it. The repository-root scenarios build their repositories at run
+time with the fixtures in `root_support.rs`. Each one runs a command at the root
+and again from a subdirectory, and the two must agree (§FS-001-config.8.1). They
+are `subdirectory_discovery.rs`, `subdirectory_scope.rs`,
+`subdirectory_registries.rs`, `explicit_config.rs`, `discovery_boundaries.rs`
+for nested repositories, linked worktrees, outside Git and `init`, and
+`fallback_note.rs` for the built-in defaults note (§FS-001-config.8.5). Every
+child process runs with `GIT_CEILING_DIRECTORIES` set, because the scratch
+directory may itself sit inside a work tree.
+
 ## Scenarios
 
 - `E2E-001-check-clean` — a clean check prints `ok` and exits zero.

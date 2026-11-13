@@ -38,6 +38,22 @@ fissile init [<path>] [--name <name>] [--force] [--dry-run]
 `init` is non-interactive. It never prompts and never guesses beyond the automatic
 entrypoint selection rules in §FS-002-init.3 and the automatic hook install in §FS-002-init.6.
 
+`<path>` defaults to `.` even inside a Git work tree whose root is elsewhere.
+`init` writes files, and a default that quietly became the enclosing work tree
+would put a config and a hook into a repository nobody named. The common way to
+get there is a fresh project made inside a dotfiles or scratch work tree before
+`git init`. A target below a work tree's root is said instead, in one warning on
+stderr, because the config written there is not the one discovery reads
+(§FS-001-config.8.1):
+
+```text
+fissile: warning: /work/repo/sub is below the root of the git repository at /work/repo; fissile discovers config only at that root, so the config here is not in effect
+```
+
+Both paths are absolute. A target at a work tree's root, or outside one, gets
+no warning. The warning comes before the report (§FS-002-init.5), `--dry-run`
+says it too, and it changes no exit code.
+
 ## 2. Files
 
 Default `fissile init` writes:

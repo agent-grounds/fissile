@@ -14,17 +14,27 @@ use serde::Deserialize;
 mod base_promotion;
 mod base_selection;
 mod base_support;
-// Unix-only: its fixture compares canonical paths, which Windows prefixes with `\\?\`.
+// Unix-only: these compare the absolute paths a note prints with canonical
+// paths, which Windows prefixes with `\\?\`.
+#[cfg(unix)]
+mod discovery_boundaries;
 #[cfg(unix)]
 mod empty_scan;
+mod explicit_config;
 mod explicit_exclusions;
+#[cfg(unix)]
+mod fallback_note;
 mod promoted_clearance;
 mod repository_root;
+mod root_support;
 mod soft_edit_limit;
 mod soft_edit_provenance;
 mod staged_gitlinks;
 mod staged_invocation;
 mod staged_paths;
+mod subdirectory_discovery;
+mod subdirectory_registries;
+mod subdirectory_scope;
 mod unit_grouping;
 mod wildcard_validation;
 

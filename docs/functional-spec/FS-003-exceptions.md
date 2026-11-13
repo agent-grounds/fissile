@@ -187,6 +187,16 @@ acceptance is a separate decision rather than the shadow of the hard one.
 ## 3. Matching
 
 `match = "exact"` compares `path` to the repo-relative normalized path.
+
+An exact path given on the command line is relative to the directory the caller
+stands in. It is recorded and reported relative to the repository root
+(§FS-001-config.8.1): `exception add x.py` run from `sub/` writes
+`path = "sub/x.py"`, and `../y.py` from there names `y.py`. A glob given with
+`--match glob` is a pattern over repository-relative paths and is taken as
+written, from every directory. A path a command refuses is named exactly as the
+caller typed it, because that is the spelling they can find in their own
+command.
+
 An exact path names a file, so one that normalizes to the repository root
 (`.`, `./`, `src/..`, the root's absolute path) is refused by every command that
 takes an exact path — `exception add`, `exception retune` and `exception remove`
