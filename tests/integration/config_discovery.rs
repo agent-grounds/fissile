@@ -90,8 +90,12 @@ struct Run {
 }
 
 fn run(root: &Path, args: &[&str]) -> Run {
+    // Fenced: the fixture is outside Git, where the root is the directory the
+    // run starts in, only if no work tree encloses the temp directory
+    // (§FS-001-config.8.1).
     let output = Command::new(env!("CARGO_BIN_EXE_fissile"))
         .current_dir(root)
+        .env("GIT_CEILING_DIRECTORIES", std::env::temp_dir())
         .args(args)
         .output()
         .expect("fissile runs");
