@@ -246,8 +246,12 @@ fn run_case(dir: &Path) -> Result<(), String> {
     }
 
     let args: Vec<&str> = case.args.iter().map(String::as_str).collect();
+    // Fenced: a case without `git = true` runs outside Git, where the root is
+    // the directory the run starts in, only if no work tree encloses the temp
+    // directory (§FS-001-config.8.1).
     let output = Command::new(env!("CARGO_BIN_EXE_fissile"))
         .current_dir(&work)
+        .env("GIT_CEILING_DIRECTORIES", std::env::temp_dir())
         .args(&args)
         .output()
         .map_err(|error| format!("spawning fissile: {error}"))?;

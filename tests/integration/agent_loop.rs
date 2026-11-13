@@ -48,8 +48,11 @@ fn work_dir() -> PathBuf {
 }
 
 fn check(root: &Path) -> (i32, String) {
+    // Fenced, so the root is this directory wherever the temp directory lives
+    // (§FS-001-config.8.1).
     let output = Command::new(env!("CARGO_BIN_EXE_fissile"))
         .current_dir(root)
+        .env("GIT_CEILING_DIRECTORIES", std::env::temp_dir())
         .args(["check", "--no-color"])
         .output()
         .expect("fissile runs");
