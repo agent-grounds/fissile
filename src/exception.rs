@@ -31,6 +31,7 @@ pub enum Rationale {
 /// Inputs to `exception add`.
 #[derive(Clone, Debug)]
 pub struct AddOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub path: String,

@@ -15,6 +15,7 @@ use crate::{FileMeasurement, RuleHit, Selector, Unit, scan};
 /// Inputs to an `audit` run.
 #[derive(Clone, Debug, Default)]
 pub struct AuditOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub format: Option<Format>,

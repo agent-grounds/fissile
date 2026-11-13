@@ -459,6 +459,15 @@ entries' `path` values as `patterns: Box<[String; 2]>` beside the measured `path
 (§FS-003-exceptions.4). That field arrived in 0.11: code that builds the variant
 or destructures it without `..` has to name it.
 
+Reading the config from the repository root changed three things for a
+library caller (§FS-001-config.8.1). `ConfigSource::deprecation()` is removed.
+`cli::config_notes` takes the loaded root beside the source and builds every
+discovery line from it. A `root` made only of `..` steps now means the caller
+stands that many levels below it, in the working directory, so a path handed in
+with it is rebased from there (§FS-007-measure.1): with root `..` from `sub/`,
+`x.py` is `sub/x.py`. Pass an absolute root to keep paths relative to the root
+itself.
+
 ## Configuration
 
 A single versioned TOML file at `.agent-grounds/fissile.toml` — data, not a plugin

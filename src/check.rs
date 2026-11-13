@@ -17,6 +17,7 @@ use crate::staged_history::{self, Candidate, SoftEdit};
 /// Inputs to a `check` run.
 #[derive(Clone, Debug)]
 pub struct CheckOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub staged: bool,
@@ -32,6 +33,7 @@ pub struct CheckOptions {
 /// edits counted per commit (§FS-004-check-audit.1.4).
 #[derive(Clone, Debug)]
 pub struct BaseCheckOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     /// `<ref>`: one revision expression naming an ancestor of `HEAD`, passed to

@@ -19,6 +19,7 @@ use crate::{FileMeasurement, Glob, RuleHit, Severity, Unit, scan};
 /// no ceiling (§FS-009-exception-remove.1).
 #[derive(Clone, Debug)]
 pub struct RemoveOptions {
+    /// The root; one made only of `..` steps puts the caller below it ([`crate::invocation`]).
     pub root: PathBuf,
     pub config_path: Option<PathBuf>,
     pub path: String,
