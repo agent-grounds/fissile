@@ -164,7 +164,7 @@ fn push_if_kept(out: &mut Vec<String>, rel: &str, exclude: &[Glob]) {
     }
 }
 
-fn relative(root: &Path, path: &Path) -> Option<String> {
+pub(crate) fn relative(root: &Path, path: &Path) -> Option<String> {
     let rel = path.strip_prefix(root).ok()?;
     Some(rel.to_string_lossy().replace('\\', "/"))
 }
@@ -177,16 +177,22 @@ pub const REPOSITORY_ROOT: &str = ".";
 /// and exact exceptions (§FS-003-exceptions.3, §FS-004-check-audit.1). The root
 /// becomes [`REPOSITORY_ROOT`], a directory the caller reads or refuses like any
 /// other rather than an invalid or empty path (§FS-004-check-audit.5).
+///
+/// Below the root (a root spelled as `..` steps, §FS-001-config.8.1) `raw` is
+/// relative to where the caller stands and is rebased onto the root, so `x.py`
+/// from `sub/` is `sub/x.py`. Every message names `raw` as the caller typed it
+/// (§FS-007-measure.1, §FS-003-exceptions.3).
 pub fn normalize_repo_path(root: &Path, raw: &str) -> io::Result<String> {
     let raw = raw.replace('\\', "/");
     let path = Path::new(&raw);
+    let below = crate::invocation::levels_below(root) > 0;
     if path.is_absolute()
         || path
             .components()
             .any(|component| component == Component::ParentDir)
     {
         let root = root.canonicalize()?;
-        let full = if path.is_absolute() {
+        let full = if path.is_absolute() || below {
             path.to_path_buf()
         } else {
             root.join(path)
@@ -202,12 +208,21 @@ pub fn normalize_repo_path(root: &Path, raw: &str) -> io::Result<String> {
         });
     }
 
-    clean_relative_path(path).map(root_as_dot).ok_or_else(|| {
+    let rel = clean_relative_path(path).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("path `{raw}` is not a repo-relative file path"),
         )
-    })
+    })?;
+    if !below {
+        return Ok(root_as_dot(rel));
+    }
+    let prefix = crate::invocation::caller_prefix(root)?;
+    Ok(root_as_dot(match (prefix.is_empty(), rel.is_empty()) {
+        (true, _) => rel,
+        (false, true) => prefix,
+        (false, false) => format!("{prefix}/{rel}"),
+    }))
 }
 
 /// An empty repo-relative path is the root itself (§FS-004-check-audit.5).
@@ -236,21 +251,10 @@ fn clean_relative_path(path: &Path) -> Option<String> {
 
 /// The root of the git work tree `dir` sits in, as git resolves it (absolute,
 /// symlinks followed), or `None` outside one or when git cannot answer. Read
-/// only to name where an empty scan looked (§FS-004-check-audit.2.2).
+/// only to name where an empty scan looked (§FS-004-check-audit.2.2), through
+/// the one probe the invocation context reads (§FS-001-config.8.1).
 pub fn git_toplevel(dir: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let top = String::from_utf8_lossy(&output.stdout)
-        .trim_end()
-        .to_owned();
-    (!top.is_empty()).then(|| PathBuf::from(top))
+    crate::invocation::probe(dir).map(|probe| probe.toplevel)
 }
 
 /// The literal git-staged file set shared by `check --staged` and `measure

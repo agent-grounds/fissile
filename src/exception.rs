@@ -158,7 +158,7 @@ pub fn run(options: &AddOptions) -> Result<Run, CommandError> {
     let warnings = restatement_warning(options, &path, unit)
         .into_iter()
         .collect();
-    let notes = cli::config_notes(&loaded.source);
+    let notes = cli::config_notes(&loaded.source, &loaded.root);
 
     if options.dry_run {
         let note = step_note.map_or_else(String::new, |note| format!(" ({note})"));

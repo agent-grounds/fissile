@@ -10,6 +10,7 @@ use std::process::ExitCode;
 
 use fissile::exception::{self, AddOptions, Rationale};
 use fissile::exceptions::{Kind, MatchKind};
+use fissile::invocation::Invocation;
 use fissile::remove::{self, RemoveOptions};
 use fissile::retune::{self, RetuneOptions};
 use fissile::{Severity, Unit};
@@ -82,7 +83,7 @@ fn run_exception_add(args: &[String]) -> ExitCode {
 
     // A person adding an exception is at a terminal; an agent, a hook, and CI
     // are not (§DF-008-hard-severity-needs-a-terminal.1).
-    let options = match builder.build(std::io::stdin().is_terminal()) {
+    let options = match builder.build(std::io::stdin().is_terminal(), &Invocation::resolve()) {
         Ok(options) => options,
         Err(message) => return usage_fail("exception add", &message, EXCEPTION_ADD_USAGE),
     };
@@ -251,9 +252,11 @@ fn run_exception_retune(args: &[String]) -> ExitCode {
             Ok(address) => address,
             Err(code) => return code,
         };
+    // The root's registry, from whichever directory (§FS-001-config.5).
+    let invocation = Invocation::resolve();
     let options = RetuneOptions {
-        root: PathBuf::from("."),
-        config_path: parsed.config_path,
+        root: invocation.root().to_path_buf(),
+        config_path: invocation.config_path(parsed.config_path),
         path,
         severity,
         rules: parsed.rules,
@@ -291,9 +294,10 @@ fn run_exception_remove(args: &[String]) -> ExitCode {
             Ok(address) => address,
             Err(code) => return code,
         };
+    let invocation = Invocation::resolve();
     let options = RemoveOptions {
-        root: PathBuf::from("."),
-        config_path: parsed.config_path,
+        root: invocation.root().to_path_buf(),
+        config_path: invocation.config_path(parsed.config_path),
         path,
         severity,
         rules: parsed.rules,
@@ -372,13 +376,14 @@ impl AddBuilder {
 
     /// `interactive` is passed in rather than probed: this turns parsed flags
     /// into options and nothing else, so what it returns does not depend on how
-    /// the process was launched (§DF-008-hard-severity-needs-a-terminal.1).
-    fn build(self, interactive: bool) -> Result<AddOptions, String> {
+    /// the process was launched (§DF-008-hard-severity-needs-a-terminal.1). The
+    /// invocation is passed in for the same reason (§FS-001-config.8.1).
+    fn build(self, interactive: bool, invocation: &Invocation) -> Result<AddOptions, String> {
         let severity = self.severity.ok_or("--severity is required")?;
         let rationale = self.rationale(severity)?;
         Ok(AddOptions {
-            root: PathBuf::from("."),
-            config_path: self.config.map(PathBuf::from),
+            root: invocation.root().to_path_buf(),
+            config_path: invocation.config_path(self.config.map(PathBuf::from)),
             path: self.path.ok_or("a <path> is required")?,
             severity,
             rules: self.rules,

@@ -75,7 +75,7 @@ pub fn run(options: &LimitsOptions) -> Result<Run, CommandError> {
     };
     Ok(Run {
         output,
-        notes: cli::config_notes(&source),
+        notes: cli::config_notes(&source, &options.root),
     })
 }
 

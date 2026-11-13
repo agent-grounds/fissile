@@ -23,6 +23,7 @@ mod glob_overlap;
 mod history;
 pub mod hook;
 pub mod init;
+pub mod invocation;
 pub mod json;
 pub mod limits;
 mod loose;

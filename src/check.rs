@@ -252,7 +252,7 @@ fn run_mode(
 
     // Discovery decided which document governs this run; the note saying so is
     // owed before anything it found (§FS-001-config.8.2).
-    let mut notes = cli::config_notes(&loaded.source);
+    let mut notes = cli::config_notes(&loaded.source, &loaded.root);
     let (output, stale_notes) = match format {
         Format::Text => {
             let color = cli::use_color(loaded.config.output.color, no_color, format);

@@ -11,9 +11,11 @@ use std::path::{Path, PathBuf};
 
 use crate::Checker;
 use crate::config::{
-    Color, Config, ConfigError, ConfigSource, Format as ConfigFormat, SoftEditLimits,
+    CONFIG_HOME, Color, Config, ConfigError, ConfigSource, DEPRECATED_CONFIG_HOME,
+    Format as ConfigFormat, SoftEditLimits,
 };
 use crate::exceptions::{ExceptionError, Registries, RegistrySource, RemovalEntry};
+use crate::invocation;
 use crate::report::EvalError;
 
 /// Output format for a finding stream (§FS-001-config.6).
@@ -171,17 +173,68 @@ pub(crate) fn load_for_soft_removal(
     ))
 }
 
-/// What this run's stderr owes before it says anything it found: the one line
-/// discovery leaves when the config came from the deprecated home, or passed one
-/// over (§FS-001-config.8.2, §FS-001-config.8.3). A `Vec` because every command
-/// already carries its stderr notes as one, and the deprecation joins them
-/// rather than needing a stream of its own.
-pub fn config_notes(source: &ConfigSource) -> Vec<String> {
-    source
-        .deprecation()
-        .map(str::to_owned)
-        .into_iter()
-        .collect()
+/// What this run's stderr owes before it says anything it found: every line
+/// discovery speaks, built here and nowhere else, from the source and the root
+/// the run loaded (§FS-001-config.8). So every command says the same lines, in
+/// the order of the points that define them. A `Vec` because every command
+/// already carries its stderr notes as one, and these join them rather than
+/// needing a stream of their own.
+pub fn config_notes(source: &ConfigSource, root: &Path) -> Vec<String> {
+    let built_in = matches!(source, ConfigSource::BuiltIn);
+    discovery_lines(
+        source,
+        &invocation::document_prefix(root),
+        invocation::passed_over(root),
+        built_in.then(|| invocation::absolute(root)).as_deref(),
+    )
+}
+
+/// The lines themselves, given what was looked up: `up` spells a config
+/// document's path from where the caller stands (§FS-001-config.8.1), `passed`
+/// is the config passed over in the invocation directory, and `root` is the
+/// absolute root a run on the defaults names. An explicit `--config` is not
+/// discovery and owes none of them.
+fn discovery_lines(
+    source: &ConfigSource,
+    up: &str,
+    passed: Option<&str>,
+    root: Option<&Path>,
+) -> Vec<String> {
+    let in_effect = match source {
+        ConfigSource::Explicit(_) => return Vec::new(),
+        ConfigSource::Home { .. } => format!("{up}{CONFIG_HOME} is the config in effect"),
+        ConfigSource::Deprecated => format!("{up}{DEPRECATED_CONFIG_HOME} is the config in effect"),
+        ConfigSource::BuiltIn => "the built-in defaults are in effect".to_owned(),
+    };
+    let mut lines = Vec::new();
+    match source {
+        // §FS-001-config.8.2
+        ConfigSource::Deprecated => lines.push(format!(
+            "fissile: warning: {up}{DEPRECATED_CONFIG_HOME} is deprecated; move it to {up}{CONFIG_HOME}"
+        )),
+        // §FS-001-config.8.3
+        ConfigSource::Home {
+            shadows_deprecated: true,
+        } => lines.push(format!(
+            "fissile: warning: {up}{DEPRECATED_CONFIG_HOME} is ignored; {in_effect}"
+        )),
+        _ => {}
+    }
+    // §FS-001-config.8.4
+    if let Some(passed) = passed {
+        lines.push(format!(
+            "fissile: warning: {passed} is ignored; discovery reads the repository root, \
+             and {in_effect}"
+        ));
+    }
+    // §FS-001-config.8.5
+    if let (ConfigSource::BuiltIn, Some(root)) = (source, root) {
+        lines.push(format!(
+            "fissile: note: no {CONFIG_HOME} in {}; using the built-in defaults",
+            root.display()
+        ));
+    }
+    lines
 }
 
 /// The file set a caller named: git-staged, or explicit paths normalized to the
@@ -313,3 +366,7 @@ impl From<io::Error> for CommandError {
         CommandError::Io(error)
     }
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;
