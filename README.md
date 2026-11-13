@@ -487,6 +487,56 @@ the rule still applies but an overflow is accepted with a written reason and
 ceiling. Omitting a rule exclusion, or writing `exclude = []`, is unchanged
 from earlier version-1 configs.
 
+### Where the config is found
+
+fissile reads the config at the root of the Git work tree it is started in,
+from whichever of its directories (§FS-001-config.8.1). A run from a
+subdirectory holds the repository to the same config, registries and scope as
+a run from the root, and a path you type is relative to where you stand:
+
+```console
+$ fissile measure sub/x.py
+sub/x.py 4 lines [py] soft 2 hard 3 — 1 over hard
+$ cd sub && fissile measure x.py
+sub/x.py 4 lines [py] soft 2 hard 3 — 1 over hard
+```
+
+A nested repository or a submodule is its own root, a linked worktree reads its
+own checkout, and outside Git the root is the directory the command started in.
+Two lines on stderr say what discovery would otherwise leave unseen. Neither
+changes stdout or an exit code:
+
+```text
+fissile: warning: .agent-grounds/fissile.toml is ignored; discovery reads the repository root, and ../.agent-grounds/fissile.toml is the config in effect
+fissile: note: no .agent-grounds/fissile.toml in /work/repo; using the built-in defaults
+```
+
+The warning names a config in the directory you stand in, below the root,
+that is not read (§FS-001-config.8.4). The note says the run holds the
+repository to the built-in defaults, and names the root it searched
+(§FS-001-config.8.5).
+
+To hold a directory to a config of its own, pass it with `--config <path>`,
+which is resolved from where you stand; or `git init` the directory, so it is a
+root of its own; or set `GIT_CEILING_DIRECTORIES`, so Git does not find the
+repository around it. A directory the enclosing repository ignores is still
+part of that repository.
+
+Runs from the root of a configured repository are unchanged. A run on the
+built-in defaults gains the note, from any directory. Runs from a subdirectory
+differ from earlier releases:
+
+- They read the repository's config, not the built-in defaults or a config in
+  that directory. That can turn a green run red, and an invalid root config now
+  exits 2 there.
+- Registries, the `[scan].include` scope and the token counter resolve from the
+  root, so a plain `check` or `audit` walks the whole scope.
+- Paths in the output carry their repository prefix (`sub/x.py`), and
+  `measure ../y.py` from `sub/` measures `y.py` instead of exiting 2 with
+  "outside the repository".
+- The passed-over warning is new on stderr, and audit's empty-scan note names
+  the root.
+
 ## How it fits together
 
 - **`init`** — config, exception registries, the managed `AGENTS.md` block, and
