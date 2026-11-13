@@ -283,13 +283,15 @@ fn words(command: &str) -> Vec<String> {
     words
 }
 
-/// The offered command line that starts with `head`, as words.
+/// The offered command line whose first words are `head`, as words. A refusal's
+/// own header, `fissile exception retune: ...`, is not one: its `:` ends the head.
 fn offered_line(ran: &Ran, head: &str) -> Option<Vec<String>> {
+    let head = format!("{head} ");
     let line = ran
         .stderr
         .lines()
         .map(str::trim)
-        .find(|line| line.starts_with(head))?;
+        .find(|line| line.starts_with(&head))?;
     Some(words(line))
 }
 
