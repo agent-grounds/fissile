@@ -10,3 +10,8 @@ The block is three sentences because the rest of the instructions live in the
 surfaces that raise each question (§DF-007-instructions-at-the-error-site.1).
 What the dry run answers is therefore what `init` would put in this repository,
 not what an agent should do about a finding — the finding says that.
+
+The block names which hook runs `fissile check --staged`: the one `init`
+installs does, and a hook that passes file paths keeps soft findings advisory
+(§FS-004-check-audit.1.4). It no longer says that any installed hook runs that
+same check, which a path-passing hook manager does not.
