@@ -13,5 +13,5 @@ path = "AGENTS.md"
 # The adopted content travels, and the block joins it rather than replacing it.
 contains = [
   "House rules an agent must read.",
-  "## Keeping Files Small With fissile (v3)",
+  "## Keeping Files Small With fissile (v4)",
 ]

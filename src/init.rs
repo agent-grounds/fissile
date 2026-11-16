@@ -28,7 +28,8 @@ const BLOCK_END: &str = "<!-- END FISSILE MANAGED BLOCK -->";
 /// The block's own heading, which states its version and — in a v1 or v2 file,
 /// written before the markers existed — was its only boundary (§FS-002-init.4).
 const BLOCK_HEADING: &str = "## Keeping Files Small With fissile (v";
-const SUPPORTED_BLOCK_VERSION: u32 = 3;
+/// v4 names which hook runs `--staged` (§FS-002-init.4); v1–v3 upgrade in place.
+const SUPPORTED_BLOCK_VERSION: u32 = 4;
 
 /// How `init` finds, versions, and rewrites the agent block (§FS-002-init.4).
 fn agent_block() -> Block<'static> {
