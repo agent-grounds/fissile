@@ -145,15 +145,33 @@ fn rejects_a_delimited_block_that_declares_no_version() {
 
 #[test]
 fn rejects_newer_block_version() {
-    let existing = "<!-- BEGIN FISSILE MANAGED BLOCK -->\n## Keeping Files Small With fissile (v4)\n\nfuture body\n<!-- END FISSILE MANAGED BLOCK -->\n";
-    let error = apply_managed_block(existing, Path::new("AGENTS.md")).expect_err("v4 unsupported");
+    let existing = "<!-- BEGIN FISSILE MANAGED BLOCK -->\n## Keeping Files Small With fissile (v5)\n\nfuture body\n<!-- END FISSILE MANAGED BLOCK -->\n";
+    let error = apply_managed_block(existing, Path::new("AGENTS.md")).expect_err("v5 unsupported");
     assert!(matches!(
         error,
         InitError::UnsupportedBlock {
-            version: Some(4),
+            version: Some(5),
             ..
         }
     ));
+}
+
+/// The v3 block said any installed hook runs the same check as `--staged`, which
+/// a path-passing hook does not. It is a supported earlier version, upgraded in
+/// place to v4, which names the hook `init` installs instead (§FS-002-init.4).
+#[test]
+fn upgrades_a_v3_block_in_place() {
+    let v3 = "<!-- BEGIN FISSILE MANAGED BLOCK -->\n## Keeping Files Small With fissile (v3)\n\nThis repository caps file size with [`fissile`](https://github.com/agent-grounds/fissile)\nso that agents spend fewer tokens reading. Run `fissile check --staged` before\nclaiming work is done; its findings say what to split and how. Where the\npre-commit hook is installed it runs that same check \u{2014} never get past it with\n`--no-verify`.\n<!-- END FISSILE MANAGED BLOCK -->\n";
+    let existing = format!("# Project\n\n{v3}\n## Other\n\nkeep me\n");
+    let (result, action) =
+        apply_managed_block(&existing, Path::new("AGENTS.md")).expect("v3 is supported");
+    assert_eq!(action, Action::Updated);
+    assert!(result.contains("## Keeping Files Small With fissile (v4)"));
+    assert!(!result.contains("(v3)"));
+    assert!(!result.contains("runs that same check"));
+    assert!(result.contains("keeps soft findings advisory"));
+    assert!(result.starts_with("# Project\n"));
+    assert!(result.contains("## Other\n\nkeep me"));
 }
 
 /// A v1/v2 block had no markers and ran to the next H1/H2. It is upgraded in

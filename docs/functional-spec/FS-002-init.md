@@ -131,7 +131,7 @@ first line of the content:
 
 ```markdown
 <!-- BEGIN FISSILE MANAGED BLOCK -->
-## Keeping Files Small With fissile (v3)
+## Keeping Files Small With fissile (v4)
 ...
 <!-- END FISSILE MANAGED BLOCK -->
 ```
@@ -182,7 +182,7 @@ an earlier version upgrades in place on its next run rather than growing a
 second block. This is why the heading keeps a fixed prefix: it is the one line
 present in every version of the block.
 
-The v3 block teaches three things, and deliberately no more
+The v4 block teaches three things, and deliberately no more
 (§DF-007-instructions-at-the-error-site.1):
 
 - that this repository caps file size, and why — the one fact that has to arrive
@@ -191,6 +191,16 @@ The v3 block teaches three things, and deliberately no more
 - that `fissile check --staged` is run before calling work done, which reaches
   the repositories where no hook fires (§FS-002-init.6);
 - that the gate is not bypassed with `--no-verify`.
+
+Where it names the hook, the block says which hook runs that check: the one
+`fissile init` installs runs `fissile check --staged` (§FS-002-init.6), and a
+hook that passes file paths — a hook manager's `fissile check <paths>` — keeps
+soft findings advisory (§FS-004-check-audit.1.4). The v3 block said any
+installed hook ran the same check as `--staged`, which a path-passing hook does
+not: an agent told so read a promoted soft finding as the commit's refusal when
+the commit's own hook passed, or trusted promotion to guard commits it never
+reached. v4 replaces that one sentence and adds nothing else. A v3 block is a
+supported earlier version, and `init` upgrades it in place to v4.
 
 The block is written by every `init` run, including the ones that install no
 hook — `--no-hook`, and a target that is not a git repository (§FS-002-init.6) — so it
