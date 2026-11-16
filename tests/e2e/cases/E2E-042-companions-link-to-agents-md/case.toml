@@ -10,4 +10,4 @@ path = "CLAUDE.md"
 target = "AGENTS.md"
 [[files]]
 path = "AGENTS.md"
-contains = ["## Keeping Files Small With fissile (v3)"]
+contains = ["## Keeping Files Small With fissile (v4)"]

@@ -6,5 +6,5 @@ stderr_contains = ["kept ./CLAUDE.md"]
 path = "CLAUDE.md"
 contains = [
   "Something this repository means to say only to Claude.",
-  "## Keeping Files Small With fissile (v3)",
+  "## Keeping Files Small With fissile (v4)",
 ]
