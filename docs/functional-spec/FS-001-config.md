@@ -89,6 +89,29 @@ names the file it came from (`.agent-grounds/fissile.toml: config parse error: �
 at line 100`), so a run driven by `--config` or an editor never leaves the reader
 guessing which document broke (§GOAL-003-friendly-output.1).
 
+### 1.1. An exceptions registry supplied as the main config
+
+A syntactically valid TOML document with a top-level
+`fissile_exceptions_version = 2` and no `fissile_config_version` identifies an
+exceptions registry. When read as the main config, it remains refused with exit
+2. The diagnostic names the supplied file, identifies it as an exceptions
+registry rather than a fissile config, and explains that `--config` takes the
+main config, normally `.agent-grounds/fissile.toml`, whose `[exceptions]` table
+names the severity-specific registries (§FS-001-config.5). It gives a usable
+recovery: omit `--config` to use normal discovery, or pass the main config.
+The guidance works for both severities; it must not direct a hard operation to
+the soft registry. Command diagnostics retain their command prefix. Refusal
+leaves both registries byte-identical and never falls back to discovery or
+repairs the supplied document.
+
+Recognition follows the top-level TOML key, including a quoted key and a marker
+after comments, rather than the filename or marker text in comments, string
+values, or nested tables. Malformed TOML, unsupported or mistyped registry
+markers, and ambiguous documents carrying both version keys retain ordinary
+config diagnostics. Main-config syntax, schema, and unsupported-version errors
+keep their useful detail and filename attribution. Explicit config discovery
+and severity-based registry selection are unchanged (§FS-001-config.8.1).
+
 ## 2. Scan scope
 
 `[scan]` controls whole-repo audit traversal:

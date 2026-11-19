@@ -19,6 +19,12 @@ fissile exception retune <path> --severity soft|hard --rule <id>
                          [--config <path>] [--match exact|glob] [--dry-run]
 ```
 
+`--config` names the main config, normally `.agent-grounds/fissile.toml`, whose
+`[exceptions]` table selects the registry for `--severity`; it does not name the
+registry to rewrite. Omit it to use normal config discovery
+(§FS-001-config.8.1). Passing a registry receives the wrong-document guidance
+in §FS-001-config.1.1.
+
 `<path>`, `--severity`, `--rule` and `--match` address the entry with exactly the
 fields that describe one to `exception add`: an entry is identified by the
 registry it lives in and the `(path matcher, rules, unit)` condition it accepts
