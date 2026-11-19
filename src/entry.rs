@@ -202,7 +202,15 @@ pub fn check_hard_limit(
             routes.stated,
             routes.hard.as_deref().map_or_else(
                 || ".".to_owned(),
-                |hard| format!(", or accept the file in the hard registry:\n  {hard}"),
+                // A person's route, refused off a terminal, so framed as one beside the split
+                // (§DF-008-hard-severity-needs-a-terminal.1, §FS-008-exception-retune.4,
+                // §FS-005-exception-add.4).
+                |hard| {
+                    format!(
+                        ", or split the file. A hard exception is a person's decision, \
+                         recorded at a terminal; to hand them the file, they run:\n  {hard}"
+                    )
+                },
             )
         ),
     }))

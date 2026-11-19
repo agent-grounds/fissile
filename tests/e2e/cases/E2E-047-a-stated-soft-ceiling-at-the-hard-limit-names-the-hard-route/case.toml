@@ -9,7 +9,7 @@ exit = 2
 stderr_contains = [
   "--max 8 is at or above rule rust hard limit 8; a soft ceiling there silences nothing.",
   "fissile exception retune src/big.rs --severity soft --rule rust --max <N> --unit lines",
-  "with 5 <= N < 8, or accept the file in the hard registry:",
+  "with 5 <= N < 8, or split the file. A hard exception is a person's decision, recorded at a terminal; to hand them the file, they run:",
   # The hard route carries the ceiling, or the rerun measures the file and is
   # refused for needing no exception (§DF-007-instructions-at-the-error-site).
   "fissile exception add src/big.rs --severity hard --rule rust --max 8 --unit lines --kind structural --reason",

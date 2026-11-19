@@ -187,9 +187,13 @@ pub(crate) fn text_line(item: &Loose) -> String {
             Remedy::StateWithin { floor, hard } => {
                 format!("retune with --max <N> --unit {unit}, {floor} <= N < {hard}")
             }
+            // A hook or CI prints this line, so it names both routes left, the hard
+            // one as a person's at a terminal (§FS-004-check-audit.2,
+            // §DF-008-hard-severity-needs-a-terminal.1).
             Remedy::HardRegistryOnly { hard } => format!(
-                "no soft ceiling under the {hard}-{} hard limit grants any — accept the file \
-                 in the hard registry with `fissile exception add --severity hard`",
+                "no soft ceiling under the {hard}-{} hard limit grants any — split the file, \
+                 or have a person accept it in the hard registry at a terminal with \
+                 `fissile exception add --severity hard`",
                 unit.singular()
             ),
         };
