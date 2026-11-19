@@ -6,5 +6,5 @@ args = ["audit", "--stale-exceptions", "--no-color"]
 exit = 0
 stdout_contains = [
   "loose ceilings:",
-  "docs/file-size-agent-exceptions.toml: src/big.rs accepts 9 lines, now 9 — no headroom; no soft ceiling under the 10-line hard limit grants any — accept the file in the hard registry with `fissile exception add --severity hard`",
+  "docs/file-size-agent-exceptions.toml: src/big.rs accepts 9 lines, now 9 — no headroom; no soft ceiling under the 10-line hard limit grants any — split the file, or have a person accept it in the hard registry at a terminal with `fissile exception add --severity hard`",
 ]

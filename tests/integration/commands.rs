@@ -932,7 +932,8 @@ fn a_stated_soft_ceiling_at_the_hard_limit_names_the_hard_route() {
          nothing. Stay under it:\n  \
          fissile exception add src/mid.rs --severity soft --rule rust --kind deferred \
          --until 'the parser lands' --reason 'a reason' --max <N> --unit lines\n\
-         with 150 <= N < 200, or accept the file in the hard registry:\n  \
+         with 150 <= N < 200, or split the file. A hard exception is a person's decision, recorded \
+         at a terminal; to hand them the file, they run:\n  \
          fissile exception add src/mid.rs --severity hard --rule rust --kind deferred \
          --until 'the parser lands' --reason 'a reason' --max 200 --unit lines"
     );

@@ -371,7 +371,8 @@ fn issue_103_offered_commands_from_a_subdirectory_run_as_printed() {
         "fissile exception retune: --max 12 is at or above rule py hard limit 10; a soft \
          ceiling there silences nothing. Stay under it:\n  \
          fissile exception retune sub/x.py --severity soft --rule py --max <N> --unit lines\n\
-         with 4 <= N < 10, or accept the file in the hard registry:\n  \
+         with 4 <= N < 10, or split the file. A hard exception is a person's decision, recorded \
+         at a terminal; to hand them the file, they run:\n  \
          fissile exception add sub/x.py --severity hard --rule py --max 12 --unit lines \
          --kind structural --reason \"...\"\n  \
          (or --kind deferred --until '<what retires it>')\n",
