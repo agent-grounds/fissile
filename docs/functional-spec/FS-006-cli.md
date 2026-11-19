@@ -30,6 +30,11 @@ lines (§GOAL-003-friendly-output.1) and the bound is enforced by a test.
 `--base <ref>` — and carries a `fissile check --base origin/main` example
 (§FS-004-check-audit.1.5).
 
+The `exception add` and `exception retune` screens explain that `--config`
+names the main config, normally `.agent-grounds/fissile.toml`, and its
+`[exceptions]` table names the registries (§FS-005-exception-add.1,
+§FS-008-exception-retune.1). This stays within the same one-screen bound.
+
 The top-level screen carries one short paragraph above the command list saying
 what `fissile` is for and how to work with it: the two tiers, the
 `check --staged` habit, and the rule that a budget is never met by damaging the

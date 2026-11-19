@@ -20,6 +20,11 @@ fissile exception add <path> --severity soft|hard --rule <id>
 `[exceptions].soft_registry`; `hard` writes to `[exceptions].hard_registry`.
 `--rule` may be repeated to create one exception for multiple same-unit rules.
 
+`--config` names the main config, normally `.agent-grounds/fissile.toml`, whose
+`[exceptions]` table selects the registries; it does not name the output
+registry. Omit it to use normal config discovery (§FS-001-config.8.1).
+Passing a registry receives the wrong-document guidance in §FS-001-config.1.1.
+
 `--kind` and `--reason` are required so every accepted oversized file carries a
 claim a reviewer can disagree with (§FS-003-exceptions.2.1,
 §DF-004-exception-kind). The kind decides what the reason must establish and what

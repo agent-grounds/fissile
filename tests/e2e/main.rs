@@ -20,6 +20,7 @@ mod base_support;
 mod discovery_boundaries;
 #[cfg(unix)]
 mod empty_scan;
+mod exception_config;
 mod explicit_config;
 mod explicit_exclusions;
 #[cfg(unix)]
