@@ -1,0 +1,27 @@
+# The report's command (agent-grounds/fissile#112): an agent, stdin not a
+# terminal, asks retune for a soft ceiling at the hard limit. The refusal stays,
+# and so does the hard route, but it is introduced as a person's decision taken
+# at a terminal, beside splitting the file (§FS-008-exception-retune.4). The
+# harness runs fissile with stdin closed, which is the agent's shell. The needles
+# are the substance, not the sentence, so the wording stays the code's to choose.
+args = [
+  "exception", "retune", "src/big.rs",
+  "--severity", "soft",
+  "--rule", "rust",
+  "--max", "8",
+  "--unit", "lines",
+]
+exit = 2
+stderr_contains = [
+  "--max 8 is at or above rule rust hard limit 8",
+  "fissile exception retune src/big.rs --severity soft --rule rust --max <N> --unit lines",
+  "terminal",
+  "person",
+  "split",
+  "fissile exception add src/big.rs --severity hard --rule rust --max 8 --unit lines",
+]
+
+[[files]]
+path = "docs/file-size-agent-exceptions.toml"
+contains = ["max_accepted = { value = 4, unit = \"lines\" }"]
+excludes = ["value = 8"]

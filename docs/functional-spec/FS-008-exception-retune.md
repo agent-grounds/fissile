@@ -135,7 +135,12 @@ step produced the number or `--max` did, it prints this call with `--max <N>
 --unit <unit>` and the range `N` may take, and for a stated value also the
 hard-severity `exception add` — carrying the ceiling and both `--kind`
 spellings, so the offered command runs as printed rather than being refused for
-accepting a file that needs no exception.
+accepting a file that needs no exception. Before that command the refusal says a
+hard entry is a person's decision, recorded at a terminal
+(§DF-008-hard-severity-needs-a-terminal.1), and names splitting the file as the
+route a caller without one takes itself; a caller sent to a command it cannot run
+is sent around a circle (§DF-007-instructions-at-the-error-site). The wording does
+not depend on whether standard input is a terminal.
 
 `--dry-run` prints the ceiling change and the registry it would update, and
 modifies nothing.
