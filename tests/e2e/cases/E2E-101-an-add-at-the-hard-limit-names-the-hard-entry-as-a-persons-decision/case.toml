@@ -1,0 +1,27 @@
+# add's own soft refusal at the hard limit prints the same hard route as retune's
+# (agent-grounds/fissile#112), and carries the same framing: a person's decision,
+# at a terminal, beside splitting the file (§FS-005-exception-add.4). The harness
+# runs fissile with stdin closed, which is the agent's shell.
+args = [
+  "exception", "add", "src/big.rs",
+  "--severity", "soft",
+  "--rule", "rust",
+  "--max", "8",
+  "--unit", "lines",
+  "--kind", "deferred",
+  "--until", "the case-builder module lands",
+  "--reason", "Missing boundary: the module this belongs in does not exist yet.",
+]
+exit = 2
+stderr_contains = [
+  "--max 8 is at or above rule rust hard limit 8",
+  "terminal",
+  "person",
+  "split",
+  "fissile exception add src/big.rs --severity hard --rule rust --kind deferred",
+  "--max 8 --unit lines",
+]
+
+[[files]]
+path = "docs/file-size-agent-exceptions.toml"
+excludes = ["src/big.rs"]

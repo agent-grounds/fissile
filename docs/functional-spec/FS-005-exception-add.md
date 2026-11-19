@@ -239,7 +239,11 @@ modifying files when:
   <unit>` and the range `N` may take, whose floor clears every selected rule's
   soft limit so the next call is not refused in turn — and, for a stated value,
   the hard-severity call carrying that same ceiling, as the other route
-  (§DF-007-instructions-at-the-error-site);
+  (§DF-007-instructions-at-the-error-site). That route is introduced as a
+  person's decision, recorded at a terminal
+  (§DF-008-hard-severity-needs-a-terminal.1), beside splitting the file, which a
+  caller without a terminal can do itself; the wording is the same whatever
+  standard input is;
 - the registry contains unrelated schema errors;
 - `--severity hard` was passed, standard input is not a terminal, and `--force`
   was not passed (§DF-008-hard-severity-needs-a-terminal.1). The refusal names

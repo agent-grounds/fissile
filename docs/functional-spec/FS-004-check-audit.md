@@ -600,7 +600,11 @@ state. It is for adoption and maintenance, not just pass/fail.
      measurement, since a ceiling at the measurement is what it already has; when
      that leaves the range empty — the file measures one under the hard limit —
      no soft ceiling grants headroom at all, and the line says so and names the
-     hard registry instead.
+     two routes left: split the file, or have a person accept it in the hard
+     registry with `fissile exception add --severity hard`, a decision recorded
+     at a terminal (§DF-008-hard-severity-needs-a-terminal.1). A hook or CI prints
+     this line, so it names both routes, whoever reads it
+     (§DF-007-instructions-at-the-error-site).
   3. **The measurement is already a multiple of the step.** The measured form of
      `retune` would write the number already recorded and report that it changed
      nothing, so the line names the stated form with the step's next multiple
@@ -616,7 +620,7 @@ state. It is for adoption and maintenance, not just pass/fail.
     docs/file-size-human-exceptions.toml: README.md accepts 519 lines, now 519 — no headroom; retune to 600
     docs/file-size-human-exceptions.toml: src/domain/tax.rs accepts 500 lines, now 500 — no headroom; retune with --max 600 --unit lines
     docs/file-size-agent-exceptions.toml: src/domain/vat.rs accepts 460 lines, now 460 — no headroom; retune with --max <N> --unit lines, 461 <= N < 500
-    docs/file-size-agent-exceptions.toml: src/domain/fee.rs accepts 499 lines, now 499 — no headroom; no soft ceiling under the 500-line hard limit grants any — accept the file in the hard registry with `fissile exception add --severity hard`
+    docs/file-size-agent-exceptions.toml: src/domain/fee.rs accepts 499 lines, now 499 — no headroom; no soft ceiling under the 500-line hard limit grants any — split the file, or have a person accept it in the hard registry at a terminal with `fissile exception add --severity hard`
   ```
 
   Every `loose` JSON record carries `no_headroom` as `0` or `1`, so a consumer

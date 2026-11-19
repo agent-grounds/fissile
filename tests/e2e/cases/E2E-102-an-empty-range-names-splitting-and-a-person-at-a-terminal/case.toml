@@ -1,0 +1,14 @@
+# The file measures 9 lines, one under a hard limit of 10, so no soft ceiling
+# grants headroom and the loose line names the hard registry (§FS-004-check-audit.2,
+# case 2). A hook or CI prints this line, so it names both routes left: split the
+# file, or have a person accept it at a terminal (agent-grounds/fissile#112). The
+# needles are the substance, not the sentence.
+args = ["audit", "--stale-exceptions", "--no-color"]
+exit = 0
+stdout_contains = [
+  "src/big.rs accepts 9 lines, now 9 — no headroom; no soft ceiling under the 10-line hard limit grants any",
+  "split",
+  "person",
+  "terminal",
+  "fissile exception add --severity hard",
+]

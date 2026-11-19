@@ -1,0 +1,12 @@
+fissile_exceptions_version = 2
+
+[[exceptions]]
+path = "src/big.rs"
+match = "exact"
+rules = ["rust"]
+kind = "deferred"
+max_accepted = { value = 9, unit = "lines" }
+until = "the case-builder module lands"
+reason = """
+Missing boundary: the module this belongs in does not exist yet.
+"""

@@ -140,3 +140,6 @@ directory may itself sit inside a work tree.
 - `E2E-097-a-json-duplicate-match-names-both-entries` — a JSON run refuses on stderr with both entries and no findings.
 - `E2E-098-a-hard-duplicate-match-names-both-entries` — the hard registry refuses in the same words.
 - `E2E-099-measure-names-both-duplicate-entries` — measure inherits the diagnostic under its own prefix.
+- `E2E-100-a-retune-at-the-hard-limit-names-the-hard-entry-as-a-persons-decision` — the hard route is a person's decision at a terminal, beside splitting the file.
+- `E2E-101-an-add-at-the-hard-limit-names-the-hard-entry-as-a-persons-decision` — add's refusal at the limit frames the hard route the same way.
+- `E2E-102-an-empty-range-names-splitting-and-a-person-at-a-terminal` — the empty-range loose line names both routes left.
