@@ -7,8 +7,8 @@
 use serde::Deserialize;
 
 use super::{
-    Color, Config, ConfigError, Exceptions, Format, Message, Output, RuleSpec, Scan, Tokens,
-    UnitSpec, default_success, default_true, format_toml_error,
+    CONFIG_HOME, Color, Config, ConfigError, Exceptions, Format, Message, Output, RuleSpec, Scan,
+    Tokens, UnitSpec, default_success, default_true, format_toml_error,
 };
 
 #[derive(Deserialize)]
@@ -80,9 +80,19 @@ struct DocumentRule {
 
 pub(super) type SpannedLimit = Option<toml::Spanned<toml::Value>>;
 
+/// Parse the main config, explaining a registry supplied in its place (§FS-001-config.1.1).
 pub(super) fn parse(source: &str) -> Result<(Config, Vec<SpannedLimit>), ConfigError> {
     let document: Document = toml::from_str(source).map_err(|error| ConfigError::Parse {
-        reason: format_toml_error(&error, source),
+        reason: if has_registry_identity(source) {
+            format!(
+                "this document is an exceptions registry, not a fissile config.\n  \
+                 --config takes the main config (normally {CONFIG_HOME}), whose \
+                 [exceptions] table names the severity-specific registries.\n  \
+                 Omit --config to use normal discovery, or pass the main config."
+            )
+        } else {
+            format_toml_error(&error, source)
+        },
     })?;
     let mut limits = Vec::with_capacity(document.rules.len());
     let rules = document
@@ -122,4 +132,17 @@ pub(super) fn parse(source: &str) -> Result<(Config, Vec<SpannedLimit>), ConfigE
         },
         limits,
     ))
+}
+
+/// Recognize only an unambiguous supported registry identity in valid TOML (§FS-001-config.1.1).
+/// This checks document identity, not the schema of the registry's entries. It runs only
+/// after main-config deserialization fails, preserving its original error and byte spans.
+fn has_registry_identity(source: &str) -> bool {
+    toml::from_str::<toml::Table>(source).is_ok_and(|document| {
+        !document.contains_key("fissile_config_version")
+            && document
+                .get("fissile_exceptions_version")
+                .and_then(toml::Value::as_integer)
+                == Some(i64::from(crate::exceptions::SUPPORTED_VERSION))
+    })
 }

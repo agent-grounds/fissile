@@ -130,6 +130,7 @@ examples:
 
 run `fissile exception <add|retune|remove> --help` for the full options";
 
+/// Add help explains main-config registry routing (§FS-006-cli.2, §FS-005-exception-add.1).
 pub const EXCEPTION_ADD_USAGE: &str = "\
 usage: fissile exception add <path> --severity soft|hard --rule <id>
                  --kind structural|deferred --reason <text> [--until <text>]
@@ -147,12 +148,15 @@ reason, and until instead of restating them, so it needs none of the three.
 Soft severity only, and the hard entry has to exist already.
 --max states the ceiling and is written as given; without it the file's
 measurement is rounded up to the configured [exceptions.bump] step.
+--config names the main config (normally .agent-grounds/fissile.toml);
+its [exceptions] table names the soft and hard registries.
 
 examples:
   fissile exception add src/big.rs --severity hard --rule source --kind deferred --reason \"...\" --until \"the parser module lands\"
   fissile exception add src/big.rs --severity soft --rule source --shadows-hard
   fissile exception add \"tests/fixtures/**\" --match glob --severity soft --rule fixtures --max 300000 --unit bytes --kind structural --reason \"...\"";
 
+/// Retune help explains main-config registry routing (§FS-006-cli.2, §FS-008-exception-retune.1).
 pub const EXCEPTION_RETUNE_USAGE: &str = "\
 usage: fissile exception retune <path> --severity soft|hard --rule <id>
                  [--max <N> --unit bytes|lines|tokens]
@@ -163,6 +167,8 @@ until untouched. Without --max the new ceiling is the file's measurement rounded
 up to the configured [exceptions.bump] step, so it reads as a decision rather
 than as whatever the file happened to measure today. With --max the ceiling is
 exactly the number given.
+--config names the main config (normally .agent-grounds/fissile.toml);
+its [exceptions] table names the soft and hard registries.
 
 examples:
   fissile exception retune src/big.rs --severity soft --rule source
