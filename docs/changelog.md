@@ -12,14 +12,18 @@ by hand (§AR-001-ci.8.3). Follow a line to its pull request for the detail,
 including the migration steps a breaking change carries. Releases up to 0.11.0
 were written by hand and keep their prose.
 
-## 1. [0.11.3] — 2026-11-09
+## 1. [0.11.4] — 2026-11-23
 
-- [Validate wildcard exception ceilings against every reachable rule](https://github.com/agent-grounds/fissile/pull/101) (PR #101)
-- [Keep finding blocks separate by measurement unit](https://github.com/agent-grounds/fissile/pull/100) (PR #100)
-- [Say what clears a promoted soft finding and how far away it is](https://github.com/agent-grounds/fissile/pull/97) (PR #97)
+- [Frame the hard route at the hard limit as a person's decision](https://github.com/agent-grounds/fissile/pull/113) (PR #113)
+- [Explain when --config points to an exceptions registry](https://github.com/agent-grounds/fissile/pull/111) (PR #111)
+- [Say which hook runs check --staged in the managed agent block](https://github.com/agent-grounds/fissile/pull/109) (PR #109)
+- [Read config from the repository root wherever fissile runs from](https://github.com/agent-grounds/fissile/pull/107) (PR #107)
+- [Explain existing scan exclusions for explicitly named findings](https://github.com/agent-grounds/fissile/pull/106) (PR #106)
+- [Skip staged submodule pointers before measuring file content](https://github.com/agent-grounds/fissile/pull/105) (PR #105)
 
 ## 2. Older releases
 
+- [0.11.3](changelog/0.11.3.md) — 2026-11-09: Validate wildcard exception ceilings against every reachable rule
 - [0.11.2](changelog/0.11.2.md) — 2026-10-19: Measure literal staged paths independently of Git display quoting
 - [0.11.1](changelog/0.11.1.md) — 2026-10-05: Write release notes from the merged pull requests
 - [0.11.0](changelog/0.11.0.md) — 2026-10-03: - `clean.sh` at the repository root gives back the disk a checkout's builds took: it runs `cargo clean`, then removes every directory holding a valid `CACHEDIR.TAG`, such as a plan's scratch build under `panta/`.
