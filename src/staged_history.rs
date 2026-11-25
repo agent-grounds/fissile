@@ -5,6 +5,11 @@
 //! History stays command-side: the public checker remains a snapshot engine.
 //! Each distinct path uses one rename-following log, while every historical
 //! blob is read through one shared `git cat-file --batch` process.
+//! Ancestry is read once for both callers' shared walk (§FS-004-check-audit.1.4.1).
+
+mod ancestry;
+
+use ancestry::ParentGraph;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -87,6 +92,7 @@ enum Seed {
 /// Derive every candidate independently, failing open for paths whose identity,
 /// log, object, or measurement cannot be proved. Errors are deliberately not
 /// returned: history may never hide findings or unrelated real command errors.
+/// Bulk ancestry is shared across candidates (§FS-004-check-audit.1.4.1).
 pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> Vec<SoftEdit> {
     let mut results: Vec<SoftEdit> = candidates
         .iter()
@@ -135,6 +141,7 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
         }
     }
 
+    let ancestry = ParentGraph::read(root, "HEAD").ok();
     let mut measurements = HistoryMeasurer::new(root, tokens);
 
     for (candidate, result) in candidates.iter().zip(&mut results) {
@@ -150,7 +157,13 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
             continue;
         };
 
-        let walked = walk(root, candidate, records, &shallow, &mut measurements);
+        let walked = walk(
+            candidate,
+            records,
+            ancestry.as_ref(),
+            &shallow,
+            &mut measurements,
+        );
         result.count += walked.counted.len() as u64;
         result.history_complete = walked.complete;
     }
@@ -163,6 +176,7 @@ pub(crate) fn derive(root: &Path, tokens: &Tokens, candidates: &[Candidate]) -> 
 /// the commit `HEAD` resolved to, so the selection and the count read one
 /// commit. Every counted commit is split by whether it is on `<ref>..HEAD`; the
 /// base never stops the walk. Fails open exactly as [`derive`] does.
+/// Reuses the bulk ancestry proof (§FS-004-check-audit.1.4.1).
 pub(crate) fn derive_committed(
     root: &Path,
     tokens: &Tokens,
@@ -195,6 +209,7 @@ pub(crate) fn derive_committed(
     let Ok(on_branch) = branch_commits(root, range) else {
         return results;
     };
+    let ancestry = ParentGraph::read(root, &range.head).ok();
     let mut logs: BTreeMap<String, Option<Vec<Record>>> = BTreeMap::new();
     let mut measurements = HistoryMeasurer::new(root, tokens);
 
@@ -206,7 +221,13 @@ pub(crate) fn derive_committed(
         let Some(records) = records else {
             continue;
         };
-        let walked = walk(root, candidate, records, &shallow, &mut measurements);
+        let walked = walk(
+            candidate,
+            records,
+            ancestry.as_ref(),
+            &shallow,
+            &mut measurements,
+        );
         let (branch, before): (Vec<_>, Vec<_>) = walked
             .counted
             .iter()
@@ -244,20 +265,26 @@ struct Walked {
 /// path-changing commit once across every reachable parent line
 /// (§FS-004-check-audit.1.4). Unprovable continuity, a shallow boundary, or a
 /// failed measurement stops the walk with what it counted as a lower bound.
+/// Predecessors come from bulk graph traversal (§FS-004-check-audit.1.4.1).
 fn walk(
-    root: &Path,
     candidate: &Candidate,
     records: &[Record],
+    ancestry: Option<&ParentGraph>,
     shallow: &HashSet<String>,
     measurements: &mut HistoryMeasurer<'_>,
 ) -> Walked {
     let mut counted = Vec::new();
+    let Some(predecessors) = ancestry.and_then(|graph| graph.predecessors(records).ok()) else {
+        return Walked {
+            counted,
+            complete: false,
+        };
+    };
     let mut frontier = (!records.is_empty())
         .then_some(0)
         .into_iter()
         .collect::<Vec<_>>();
     let mut visited = HashSet::new();
-    let mut ancestry = Ancestry::new(root);
     let mut closed_frontiers = 0usize;
     let mut proof_failed = false;
     while let Some(index) = frontier.pop() {
@@ -300,67 +327,15 @@ fn walk(
             closed_frontiers += 1;
             continue;
         }
-        let predecessors = direct_predecessors(records, index, &mut ancestry);
-        if predecessors.is_empty() {
+        if predecessors[index].is_empty() {
             proof_failed = true;
             break;
         }
-        frontier.extend(predecessors);
+        frontier.extend(predecessors[index].iter().copied());
     }
     Walked {
         complete: !proof_failed && closed_frontiers > 0 && frontier.is_empty(),
         counted,
-    }
-}
-
-/// Nearest older path-changing commits on every reachable parent line. A
-/// reset stops only the line that reaches it; a shared ancestor remains live
-/// when another parent can still reach it without crossing that reset.
-fn direct_predecessors(
-    records: &[Record],
-    current: usize,
-    ancestry: &mut Ancestry<'_>,
-) -> Vec<usize> {
-    let mut predecessors: Vec<usize> = Vec::new();
-    for candidate in current + 1..records.len() {
-        if !ancestry.is_ancestor(&records[candidate].commit, &records[current].commit) {
-            continue;
-        }
-        if predecessors.iter().any(|nearer| {
-            ancestry.is_ancestor(&records[candidate].commit, &records[*nearer].commit)
-        }) {
-            continue;
-        }
-        predecessors.push(candidate);
-    }
-    predecessors
-}
-
-struct Ancestry<'a> {
-    root: &'a Path,
-    cache: HashMap<(String, String), bool>,
-}
-
-impl<'a> Ancestry<'a> {
-    fn new(root: &'a Path) -> Self {
-        Self {
-            root,
-            cache: HashMap::new(),
-        }
-    }
-
-    fn is_ancestor(&mut self, ancestor: &str, descendant: &str) -> bool {
-        let key = (ancestor.to_owned(), descendant.to_owned());
-        *self.cache.entry(key).or_insert_with(|| {
-            Command::new("git")
-                .arg("-C")
-                .arg(self.root)
-                .args(["merge-base", "--is-ancestor", ancestor, descendant])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok_and(|status| status.success())
-        })
     }
 }
 
@@ -450,6 +425,8 @@ fn file_log(root: &Path, start: Option<&str>, path: &str) -> io::Result<Vec<Reco
     Ok(parse_log(&output.stdout))
 }
 
+/// Combine merge-parent entries by commit without rescanning earlier records
+/// (§FS-004-check-audit.1.4.1), preserving the log's order and proof rules.
 fn parse_log(output: &[u8]) -> Vec<Record> {
     #[derive(Clone)]
     struct Entry {
@@ -465,6 +442,7 @@ fn parse_log(output: &[u8]) -> Vec<Record> {
     }
 
     let mut commits: Vec<Commit> = Vec::new();
+    let mut commit_indices: HashMap<String, usize> = HashMap::new();
     for chunk in output
         .split(|byte| *byte == 0x1e)
         .filter(|part| !part.is_empty())
@@ -513,9 +491,10 @@ fn parse_log(output: &[u8]) -> Vec<Record> {
             });
             index += path_offset + 1;
         }
-        if let Some(existing) = commits.iter_mut().find(|item| item.id == commit) {
-            existing.entries.extend(entries);
+        if let Some(&index) = commit_indices.get(&commit) {
+            commits[index].entries.extend(entries);
         } else {
+            commit_indices.insert(commit.clone(), commits.len());
             commits.push(Commit {
                 id: commit,
                 parent_count,
