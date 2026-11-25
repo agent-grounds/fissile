@@ -25,6 +25,9 @@ mod explicit_config;
 mod explicit_exclusions;
 #[cfg(unix)]
 mod fallback_note;
+// The Git command interceptor uses a POSIX shell script.
+#[cfg(unix)]
+mod history_cost;
 mod promoted_clearance;
 mod repository_root;
 mod root_support;
