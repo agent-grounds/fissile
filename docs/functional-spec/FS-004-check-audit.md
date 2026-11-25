@@ -452,6 +452,18 @@ derived by subtracting from the count. JSON carries the staged trio,
 `<before>`; the branch's share is `soft_edit_count - soft_edit_before_base`. A
 `soft_edit_count` of `0` occurs only on such a record with incomplete history.
 
+#### 1.4.1 History proof cost
+
+The shared staged and committed proof must use at most a constant number of Git
+subprocesses plus a constant per visited history record (§GOAL-001-fast-feedback.1).
+Acquire ancestry in bulk or reuse equivalent evidence; derive predecessors by
+graph traversal with reusable results. A linear history requires linear ancestry
+work in its commits and parent edges: all-pairs work in memory is also insufficient.
+
+All counting and evidence rules above remain unchanged for both callers
+(§FS-004-check-audit.1.5). No count cap, promotion-threshold short-circuit, or
+timeout may replace the full proof back to a reset or absence.
+
 ### 1.5 Checking a branch against a base
 
 `check --base <ref>` asks the commit gate's question of a whole branch: do its
